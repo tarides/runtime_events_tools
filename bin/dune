@@ -1,0 +1,17 @@
+(executable
+ (public_name trace_prog)
+ (name trace_prog)
+ (modules trace_prog)
+ (libraries runtime_events unix))
+
+(executable
+ (public_name summarise_gc)
+ (name summarise_gc)
+ (modules summarise_gc)
+ (libraries runtime_events unix))
+
+(executable
+ (public_name test_executable)
+ (modules test_executable)
+ (name test_executable)
+ (libraries unix))
