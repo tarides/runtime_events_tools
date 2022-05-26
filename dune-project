@@ -5,7 +5,7 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github sadiqj/runtime_events_tools))
 
 (authors "Author Name")
 
@@ -17,10 +17,9 @@
 
 (package
  (name runtime_events_tools)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml dune)
- (tags
-  (topics "to describe" your project)))
+ (synopsis "Tools for the Runtime_events tracing system in OCaml")
+ (description "Various tools for the Runtime_events tracing system in OCaml")
+ (depends ocaml dune runtime_events)
+)
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
