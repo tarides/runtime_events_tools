@@ -8,8 +8,8 @@ license: "ISC"
 homepage: "https://github.com/sadiqj/runtime_events_tools"
 bug-reports: "https://github.com/sadiqj/runtime_events_tools/issues"
 depends: [
-  "ocaml"
   "dune" {>= "3.2"}
+  "ocaml" {>= "5.0.0~"}
   "odoc" {with-doc}
 ]
 build: [

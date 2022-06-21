@@ -1,15 +1,15 @@
 let () =
   if Array.length Sys.argv < 3 then
-    Printf.printf "runtime_tracer <trace_filename> <executable> <args> ...\n"
+    Printf.eprintf "%s <trace_filename> <executable> <args> ...\n" Sys.argv.(0)
   else begin
     (* Parse arguments and set up environment *)
-    let trace_filename = Array.get Sys.argv 1 in
+    let trace_filename = Sys.argv.(1) in
     let trace_file = open_out trace_filename in
     Printf.fprintf trace_file "[";
-    let executable_filename = Array.get Sys.argv 2 in
+    let executable_filename = Sys.argv.(2) in
     let args = if Array.length Sys.argv > 3 then Array.sub Sys.argv 2 (Array.length Sys.argv - 2) else [||] in
     (* Set the temp directory. We should make this configurable. *)
-    let tmp_dir = "/tmp/" in
+    let tmp_dir = Filename.get_temp_dir_name () in
     let env = [Unix.environment (); [| "OCAML_RUNTIME_EVENTS_START=1"; "OCAML_RUNTIME_EVENTS_DIR=" ^ tmp_dir; "OCAML_RUNTIME_EVENTS_PRESERVE=1" |]] |> Array.concat in
     let child_pid = Unix.create_process_env executable_filename args env Unix.stdin Unix.stdout Unix.stderr in
     (* Helper for callbacks *)
@@ -40,3 +40,4 @@ let () =
         Filename.concat tmp_dir (string_of_int child_pid ^ ".events") in
     Unix.unlink ring_file
   end
+
