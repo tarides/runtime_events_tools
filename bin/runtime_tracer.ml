@@ -9,7 +9,7 @@ let () =
     let executable_filename = Sys.argv.(2) in
     let args = if Array.length Sys.argv > 3 then Array.sub Sys.argv 2 (Array.length Sys.argv - 2) else [||] in
     (* Set the temp directory. We should make this configurable. *)
-    let tmp_dir = Filename.get_temp_dir_name () in
+    let tmp_dir = Filename.get_temp_dir_name ()  ^ "/" in
     let env = [Unix.environment (); [| "OCAML_RUNTIME_EVENTS_START=1"; "OCAML_RUNTIME_EVENTS_DIR=" ^ tmp_dir; "OCAML_RUNTIME_EVENTS_PRESERVE=1" |]] |> Array.concat in
     let child_pid = Unix.create_process_env executable_filename args env Unix.stdin Unix.stdout Unix.stderr in
     (* Helper for callbacks *)
@@ -32,8 +32,11 @@ let () =
       | (p, _) when p = child_pid -> false
       | (_, _) -> assert(false) in
     while child_alive () do begin
-      Runtime_events.read_poll cursor callbacks None |> ignore
+      Runtime_events.read_poll cursor callbacks None |> ignore;
+      Unix.sleepf 0.1 (* Poll at 10Hz *)
     end done;
+    (* Do one more poll in case there are any remaining events we've missed *)
+    Runtime_events.read_poll cursor callbacks None |> ignore;
     (* Now we're done, we need to remove the ring buffers ourselves because we
       told the child process not to remove them *)
     let ring_file =
