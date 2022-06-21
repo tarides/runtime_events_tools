@@ -15,4 +15,4 @@
  (name runtime_events_tools)
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml")
- (depends (ocaml (>= "5.0.0~"))))
+ (depends (ocaml (>= "5.0.0~")) ocamlfind))

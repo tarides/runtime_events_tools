@@ -10,6 +10,7 @@ bug-reports: "https://github.com/sadiqj/runtime_events_tools/issues"
 depends: [
   "dune" {>= "3.2"}
   "ocaml" {>= "5.0.0~"}
+  "ocamlfind"
   "odoc" {with-doc}
 ]
 build: [
