@@ -1,7 +1,9 @@
+# Runtime events tools
+
 A collection of observability tools around the runtime events tracing system
 introduced in OCaml 5.0.
 
-## olly
+## olly
 
 `olly` will report the GC tail latency profile of an OCaml executable.
 
@@ -70,6 +72,9 @@ menhir_sysver.trace
 ```
 
 This trace can be viewed in [perfetto trace viewer](https://ui.perfetto.dev/).
+
+![image](https://user-images.githubusercontent.com/410484/175475118-b08cbf06-a939-4edb-9336-20dfd464bb1b.png)
+
 
 ## Dependencies
 
