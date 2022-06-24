@@ -2,7 +2,6 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
-
 let print_percentiles hist =
   let ms ns = ns /. 1000000. in
   Printf.eprintf "\n";
