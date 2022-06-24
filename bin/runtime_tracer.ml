@@ -85,6 +85,12 @@ let olly trace_filename exec_args =
     end
   in
 
+  (* emit prefix in the tracefile *)
+  begin match trace_file with
+  | None -> ()
+  | Some f -> Printf.fprintf f "["
+  end;
+
   (* Read from the child process *)
   Unix.sleep 1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
