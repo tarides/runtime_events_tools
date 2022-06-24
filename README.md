@@ -6,7 +6,34 @@ introduced in OCaml 5.0.
 `olly` will report the GC tail latency profile of an OCaml executable.
 
 ```bash
-$ olly 'menhir -v --table sysver.mly'
+$ olly ocamlopt.opt
+GC latency profile:
+#[Mean (ms):    0.34,    Stddev (ms):   0.49]
+#[Min (ms):     0.01,    max (ms):      1.19]
+
+Percentile       Latency (ms)
+25.0000          0.01
+50.0000          0.04
+60.0000          0.04
+70.0000          0.13
+75.0000          0.13
+80.0000          0.13
+85.0000          0.13
+90.0000          1.19
+95.0000          1.19
+96.0000          1.19
+97.0000          1.19
+98.0000          1.19
+99.0000          1.19
+99.9000          1.19
+99.9900          1.19
+99.9990          1.19
+99.9999          1.19
+100.0000         1.19
+```
+
+```bash
+$ olly 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
 <snip>
 GC latency profile:
 #[Mean (ms):    0.03,    Stddev (ms):   0.25]
@@ -37,6 +64,7 @@ Percentile       Latency (ms)
 
 ```bash
 $ olly -t menhir_sysver.trace 'menhir -v --table sysver.mly'
+<snip>
 $ ls menhir_sysver.trace
 menhir_sysver.trace
 ```
