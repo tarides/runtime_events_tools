@@ -6,14 +6,18 @@ open Cmdliner
 let print_percentiles hist =
   let ms ns = ns /. 1000000. in
   Printf.eprintf "\n";
+  Printf.eprintf "GC latency profile:\n";
   Printf.eprintf "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n"
     (H.mean hist |> ms) (H.stddev hist |> ms);
   Printf.eprintf "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
     (float_of_int (H.min hist) |> ms) (float_of_int (H.max hist) |> ms);
 
   Printf.eprintf "\n";
-  let percentiles = [| 50.0; 75.0; 90.0; 99.0; 99.9; 99.99; 99.999; 100.0 |] in
-  Printf.eprintf "percentile \t latency (ms)\n";
+  let percentiles = [| 25.0; 50.0; 60.0; 70.0; 75.0; 80.0; 85.0; 90.0; 95.0;
+                       96.0; 97.0; 98.0; 99.0; 99.9; 99.99; 99.999; 99.9999;
+                       100.0 |]
+  in
+  Printf.eprintf "Percentile \t Latency (ms)\n";
   Fun.flip Array.iter percentiles (fun p -> Printf.eprintf "%.4f \t %.2f\n" p
     (float_of_int (H.value_at_percentile hist p) |> ms))
 
@@ -126,7 +130,7 @@ let () =
     Term.(const olly $ trace_filename $ exec_args)
   in
   let cmd =
-    let doc = "trace an OCaml executable" in
+    let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info "olly" ~doc in
     Cmd.v info olly_t
   in
