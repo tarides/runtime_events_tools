@@ -5,10 +5,10 @@ introduced in OCaml 5.0.
 
 ## olly
 
-`olly` will report the GC tail latency profile of an OCaml executable.
+`olly latency` will report the GC tail latency profile of an OCaml executable.
 
 ```bash
-$ olly ocamlopt.opt
+$ olly latency ocamlopt.opt
 GC latency profile:
 #[Mean (ms):    0.34,    Stddev (ms):   0.49]
 #[Min (ms):     0.01,    max (ms):      1.19]
@@ -35,7 +35,7 @@ Percentile       Latency (ms)
 ```
 
 ```bash
-$ olly 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
+$ olly latency 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
 <snip>
 GC latency profile:
 #[Mean (ms):    0.03,    Stddev (ms):   0.25]
@@ -62,10 +62,10 @@ Percentile       Latency (ms)
 100.0000         39.75
 ```
 
-`olly` can also record the runtime trace log in Chrome tracing format.
+`olly trace` will record the runtime trace log in Chrome tracing format.
 
 ```bash
-$ olly -t menhir_sysver.trace 'menhir -v --table sysver.mly'
+$ olly trace menhir_sysver.trace 'menhir -v --table sysver.mly'
 <snip>
 $ ls menhir_sysver.trace
 menhir_sysver.trace
