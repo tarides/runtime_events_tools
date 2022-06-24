@@ -1,5 +1,5 @@
 (executable
- (public_name ocaml-runtime-tracer)
- (name runtime_tracer)
- (modules runtime_tracer)
- (libraries runtime_events unix))
+ (public_name olly)
+ (name olly)
+ (modules olly)
+ (libraries runtime_events unix hdr_histogram cmdliner))
