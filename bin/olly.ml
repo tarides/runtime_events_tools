@@ -20,13 +20,12 @@ let print_percentiles hist =
   Fun.flip Array.iter percentiles (fun p -> Printf.eprintf "%.4f \t %.2f\n" p
     (float_of_int (H.value_at_percentile hist p) |> ms))
 
+let lost_events ring_id num =
+  Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
+
 let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
-  let executable_filename, args =
-    match String.split_on_char ' ' exec_args with
-    | [] -> assert false
-    | x::xs -> x,xs
-  in
-  let args = Array.of_list args in
+  let argsl = String.split_on_char ' ' exec_args in
+  let executable_filename = List.hd argsl in
 
   (* Set the temp directory. We should make this configurable. *)
   let tmp_dir = Filename.get_temp_dir_name ()  ^ "/" in
@@ -36,15 +35,17 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
                           (Unix.environment ())
   in
   let child_pid =
-    Unix.create_process_env executable_filename args env
+    Unix.create_process_env executable_filename (Array.of_list argsl) env
                             Unix.stdin Unix.stdout Unix.stderr
   in
 
   init ();
   (* Read from the child process *)
-  Unix.sleep 1;
+  Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
-  let callbacks = Runtime_events.Callbacks.create ~runtime_begin ~runtime_end () in
+  let callbacks =
+    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lost_events ()
+  in
   let child_alive () = match Unix.waitpid [ Unix.WNOHANG ] child_pid with
     | (0, _) -> true
     | (p, _) when p = child_pid -> false
