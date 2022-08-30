@@ -2,18 +2,10 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
-let print_percentiles hist =
+let print_percentiles name json hist =
   let ms ns = ns /. 1000000. in
-  Printf.eprintf "\n";
-  Printf.eprintf "GC latency profile:\n";
-  Printf.eprintf "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n"
-    (H.mean hist |> ms)
-    (H.stddev hist |> ms);
-  Printf.eprintf "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
-    (float_of_int (H.min hist) |> ms)
-    (float_of_int (H.max hist) |> ms);
-
-  Printf.eprintf "\n";
+  let mean_latency = H.mean hist |> ms
+  and max_latency = float_of_int (H.max hist) |> ms in
   let percentiles =
     [|
       25.0;
@@ -36,10 +28,32 @@ let print_percentiles hist =
       100.0;
     |]
   in
-  Printf.eprintf "Percentile \t Latency (ms)\n";
-  Fun.flip Array.iter percentiles (fun p ->
-      Printf.eprintf "%.4f \t %.2f\n" p
-        (float_of_int (H.value_at_percentile hist p) |> ms))
+  if json then
+    let distribs =
+      List.init (Array.length percentiles) (fun i ->
+          H.value_at_percentile hist percentiles.(i)
+          |> float_of_int |> ms |> string_of_float)
+      |> String.concat ","
+    in
+    Printf.printf
+      {|{"name": "%s", "mean_latency": %d, "max_latency: %d, "distr_latency": [%s]}
+      |}
+      name
+      (int_of_float mean_latency)
+      (int_of_float max_latency) distribs
+  else (
+    Printf.eprintf "\n";
+    Printf.eprintf "GC latency profile:\n";
+    Printf.eprintf "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
+      (H.stddev hist |> ms);
+    Printf.eprintf "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
+      (float_of_int (H.min hist) |> ms)
+      max_latency;
+    Printf.eprintf "\n";
+    Printf.eprintf "Percentile \t Latency (ms)\n";
+    Fun.flip Array.iter percentiles (fun p ->
+        Printf.eprintf "%.4f \t %.2f\n" p
+          (float_of_int (H.value_at_percentile hist p) |> ms)))
 
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
@@ -119,7 +133,7 @@ let trace trace_filename exec_args =
   let cleanup () = close_out trace_file in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
-let latency exec_args =
+let latency json exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -139,7 +153,9 @@ let latency exec_args =
     | _ -> ()
   in
   let init = Fun.id in
-  let cleanup () = print_percentiles hist in
+  let cleanup () =
+    print_percentiles (List.hd @@ String.split_on_char ' ' exec_args) json hist
+  in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
@@ -204,6 +220,11 @@ let () =
     Cmd.v info Term.(const trace $ trace_filename $ exec_args 1)
   in
 
+  let json_option =
+    let doc = "Print the output in json instead of human-readable format." in
+    Arg.(value & flag & info [ "json" ] ~docv:"json" ~doc)
+  in
+
   let latency_cmd =
     let man =
       [
@@ -214,7 +235,7 @@ let () =
     in
     let doc = "Report the GC latency profile." in
     let info = Cmd.info "latency" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const latency $ exec_args 0)
+    Cmd.v info Term.(const latency $ json_option $ exec_args 0)
   in
 
   let help_cmd =
