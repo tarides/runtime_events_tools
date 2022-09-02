@@ -2,7 +2,7 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
-let print_percentiles name json output hist =
+let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
   let mean_latency = H.mean hist |> ms
   and max_latency = float_of_int (H.max hist) |> ms in
@@ -37,8 +37,7 @@ let print_percentiles name json output hist =
       |> String.concat ","
     in
     Printf.fprintf oc
-      {|{"name": "%s", "mean_latency": %d, "max_latency: %d, "distr_latency": [%s]}|}
-      name
+      {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
       (int_of_float mean_latency)
       (int_of_float max_latency) distribs
   else (
@@ -153,11 +152,7 @@ let latency json output exec_args =
     | _ -> ()
   in
   let init = Fun.id in
-  let name =
-    exec_args |> String.split_on_char ' ' |> List.hd |> Filename.basename
-    |> Filename.remove_extension
-  in
-  let cleanup () = print_percentiles name json output hist in
+  let cleanup () = print_percentiles json output hist in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
