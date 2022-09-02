@@ -153,9 +153,11 @@ let latency json exec_args =
     | _ -> ()
   in
   let init = Fun.id in
-  let cleanup () =
-    print_percentiles (List.hd @@ String.split_on_char ' ' exec_args) json hist
+  let name =
+    exec_args |> String.split_on_char ' ' |> List.hd |> Filename.basename
+    |> Filename.remove_extension
   in
+  let cleanup () = print_percentiles name json hist in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
