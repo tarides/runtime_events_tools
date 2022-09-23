@@ -2,7 +2,7 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
-let print_percentiles name json hist =
+let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
   let mean_latency = H.mean hist |> ms
   and max_latency = float_of_int (H.max hist) |> ms in
@@ -28,6 +28,7 @@ let print_percentiles name json hist =
       100.0;
     |]
   in
+  let oc = match output with Some s -> open_out s | None -> stderr in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -35,24 +36,22 @@ let print_percentiles name json hist =
           |> float_of_int |> ms |> string_of_float)
       |> String.concat ","
     in
-    Printf.printf
-      {|{"name": "%s", "mean_latency": %d, "max_latency: %d, "distr_latency": [%s]}
-      |}
-      name
+    Printf.fprintf oc
+      {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
       (int_of_float mean_latency)
       (int_of_float max_latency) distribs
   else (
-    Printf.eprintf "\n";
-    Printf.eprintf "GC latency profile:\n";
-    Printf.eprintf "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
+    Printf.fprintf oc "\n";
+    Printf.fprintf oc "GC latency profile:\n";
+    Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
       (H.stddev hist |> ms);
-    Printf.eprintf "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
+    Printf.fprintf oc "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
       (float_of_int (H.min hist) |> ms)
       max_latency;
-    Printf.eprintf "\n";
-    Printf.eprintf "Percentile \t Latency (ms)\n";
+    Printf.fprintf oc "\n";
+    Printf.fprintf oc "Percentile \t Latency (ms)\n";
     Fun.flip Array.iter percentiles (fun p ->
-        Printf.eprintf "%.4f \t %.2f\n" p
+        Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
 let lost_events ring_id num =
@@ -133,7 +132,7 @@ let trace trace_filename exec_args =
   let cleanup () = close_out trace_file in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
-let latency json exec_args =
+let latency json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -153,9 +152,7 @@ let latency json exec_args =
     | _ -> ()
   in
   let init = Fun.id in
-  let cleanup () =
-    print_percentiles (List.hd @@ String.split_on_char ' ' exec_args) json hist
-  in
+  let cleanup () = print_percentiles json output hist in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
@@ -225,6 +222,17 @@ let () =
     Arg.(value & flag & info [ "json" ] ~docv:"json" ~doc)
   in
 
+  let output_option =
+    let doc =
+      "Redirect the output of `olly` to specified file. The output of the \
+       command is not redirected."
+    in
+    Arg.(
+      value
+      & opt (some string) None
+      & info [ "o"; "output" ] ~docv:"output" ~doc)
+  in
+
   let latency_cmd =
     let man =
       [
@@ -235,7 +243,7 @@ let () =
     in
     let doc = "Report the GC latency profile." in
     let info = Cmd.info "latency" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const latency $ json_option $ exec_args 0)
+    Cmd.v info Term.(const latency $ json_option $ output_option $ exec_args 0)
   in
 
   let help_cmd =
