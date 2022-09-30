@@ -57,7 +57,7 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
+let olly ~runtime_begin ~runtime_end ?custom_span:(custom_span=None) ~cleanup ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -83,6 +83,11 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
   let callbacks =
     Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lost_events ()
+  in
+  let callbacks = if Option.is_some custom_span then
+    Runtime_events.Callbacks.add Runtime_events.Type.span (custom_span |> Option.get) callbacks
+  else
+    callbacks
   in
   let child_alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
@@ -125,12 +130,26 @@ let trace trace_filename exec_args =
       (ts_to_us ts) ring_id ring_id;
     flush trace_file
   in
+  let custom_span ring_id ts event_type span =
+    let custom_name =
+      Runtime_events.User.name event_type in
+    let begin_or_end = match span with
+                        Runtime_events.Type.Begin -> "B"
+                      | Runtime_events.Type.End -> "E" in
+      Printf.fprintf trace_file
+      "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"%s\", \"ts\":%Ld, \
+        \"pid\": %d, \"tid\": %d},\n"
+      begin_or_end
+      custom_name
+      (ts_to_us ts) ring_id ring_id;
+    flush trace_file
+  in
   let init () =
     (* emit prefix in the tracefile *)
     Printf.fprintf trace_file "["
   in
   let cleanup () = close_out trace_file in
-  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+  olly ~runtime_begin ~runtime_end ~init ~custom_span:(Some custom_span) ~cleanup exec_args
 
 let latency json output exec_args =
   let current_event = Hashtbl.create 13 in
