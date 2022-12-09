@@ -13,6 +13,7 @@ depends: [
   "ocamlfind"
   "hdr_histogram"
   "cmdliner"
+  "tracing"
   "odoc" {with-doc}
 ]
 build: [

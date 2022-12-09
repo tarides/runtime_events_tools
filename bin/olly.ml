@@ -132,6 +132,39 @@ let trace trace_filename exec_args =
   let cleanup () = close_out trace_file in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
+(* ftf ~ fuchsia trace format, a binary format viewable in Perfetto *)
+let trace_ftf trace_filename exec_args =
+  let open Tracing in
+  let trace_file = Trace.create_for_file ~base_time:None ~filename:trace_filename in
+  (* Note: FTF timestamps are nanoseconds
+     https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#timestamps so no need
+     to scale as is done in [trace] above *)
+  let ts_to_int ts = ts |> Ts.to_int64 |> Int64.to_int in
+  let int_to_span i = Core.Time_ns.Span.of_int_ns i in
+  let doms = 
+    (* Allocate all domains before starting to write trace; as in [trace] above we
+       identify the thread id with the ring_id used by runtime events. This pre-allocation
+       consumes about 7kB in the trace file. *)
+    let max_doms = 128 in
+    Array.init max_doms (fun i -> 
+        Trace.allocate_thread trace_file ~pid:1 ~name:(Printf.sprintf "Ring_id %d" i))
+  in
+  let runtime_begin ring_id ts phase =
+    let thread = doms.(ring_id) in
+    Trace.write_duration_begin trace_file ~args:[] ~thread ~category:"PERF"
+      ~name:(Runtime_events.runtime_phase_name phase)
+      ~time:(ts |> ts_to_int |> int_to_span)
+  in
+  let runtime_end ring_id ts phase =
+    let thread = doms.(ring_id) in
+    Trace.write_duration_end trace_file ~args:[] ~thread ~category:"PERF"
+      ~name:(Runtime_events.runtime_phase_name phase)
+      ~time:(ts |> ts_to_int |> int_to_span)
+  in
+  let init () = () in
+  let cleanup () = Trace.close trace_file in
+  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+
 let latency json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
@@ -217,6 +250,23 @@ let () =
     Cmd.v info Term.(const trace $ trace_filename $ exec_args 1)
   in
 
+  let trace_ftf_cmd =
+    let trace_filename =
+      let doc = "Target trace file name." in
+      Arg.(required & pos 0 (some string) None & info [] ~docv:"TRACEFILE" ~doc)
+    in
+    let man =
+      [
+        `S Manpage.s_description;
+        `P "Save the runtime trace in Fuchsia Trace Format (FTF).";
+        `Blocks help_secs;
+      ]
+    in
+    let doc = "Save the runtime trace in Fuchsia Trace Format (FTF)." in
+    let info = Cmd.info "trace_ftf" ~doc ~sdocs ~man in
+    Cmd.v info Term.(const trace_ftf $ trace_filename $ exec_args 1)
+  in
+
   let json_option =
     let doc = "Print the output in json instead of human-readable format." in
     Arg.(value & flag & info [ "json" ] ~docv:"json" ~doc)
@@ -267,7 +317,7 @@ let () =
   let main_cmd =
     let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info "olly" ~doc ~sdocs in
-    Cmd.group info [ trace_cmd; latency_cmd; help_cmd ]
+    Cmd.group info [ trace_cmd; trace_ftf_cmd; latency_cmd; help_cmd ]
   in
 
   exit (Cmd.eval main_cmd)
