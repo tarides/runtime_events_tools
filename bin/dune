@@ -2,4 +2,4 @@
  (public_name olly)
  (name olly)
  (modules olly)
- (libraries runtime_events unix hdr_histogram cmdliner))
+ (libraries runtime_events unix hdr_histogram cmdliner tracing))
