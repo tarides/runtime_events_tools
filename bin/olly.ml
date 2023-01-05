@@ -61,7 +61,7 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
+let olly ~poll_sleep ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -96,7 +96,7 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   in
   while child_alive () do
     Runtime_events.read_poll cursor callbacks None |> ignore;
-    Unix.sleepf 0.1 (* Poll at 10Hz *)
+    if poll_sleep > 0.0 then Unix.sleepf poll_sleep
   done;
 
   (* Do one more poll in case there are any remaining events we've missed *)
@@ -110,7 +110,7 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   Unix.unlink ring_file;
   cleanup ()
 
-let trace format trace_filename exec_args =
+let trace poll_sleep format trace_filename exec_args =
   match format with
   | Json ->
     let trace_file = open_out trace_filename in
@@ -136,7 +136,7 @@ let trace format trace_filename exec_args =
       Printf.fprintf trace_file "["
     in
     let cleanup () = close_out trace_file in
-    olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+    olly ~poll_sleep ~runtime_begin ~runtime_end ~init ~cleanup exec_args
   | Fuchsia ->
     let open Tracing in
     let trace_file = Trace.create_for_file ~base_time:None ~filename:trace_filename in
@@ -168,9 +168,9 @@ let trace format trace_filename exec_args =
     in
     let init () = () in
     let cleanup () = Trace.close trace_file in
-    olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+    olly ~poll_sleep ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
-let latency json output exec_args =
+let latency poll_sleep json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -191,7 +191,7 @@ let latency json output exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+  olly ~poll_sleep ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
   match topic with
@@ -247,6 +247,15 @@ let () =
       & info [ "f"; "format" ] ~docv:"format" ~doc)
   in
 
+  let poll_sleep_option =
+    let doc = "Set the interval that olly sleeps, after performing a [read_poll]. A value \
+               of 0.0 will skip sleeping altogether." in
+    Arg.(
+      value
+      & opt float 0.1 (* Poll at 10Hz by default *)
+      & info [ "poll_sleep" ] ~docv:"poll_sleep" ~doc)
+  in
+
   let trace_cmd =
     let trace_filename =
       let doc = "Target trace file name." in
@@ -261,7 +270,7 @@ let () =
     in
     let doc = "Save the runtime trace to file." in
     let info = Cmd.info "trace" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const trace $ format_option $ trace_filename $ exec_args 1)
+    Cmd.v info Term.(const trace $ poll_sleep_option $ format_option $ trace_filename $ exec_args 1)
   in
 
   let json_option =
@@ -290,7 +299,7 @@ let () =
     in
     let doc = "Report the GC latency profile." in
     let info = Cmd.info "latency" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const latency $ json_option $ output_option $ exec_args 0)
+    Cmd.v info Term.(const latency $ poll_sleep_option $ json_option $ output_option $ exec_args 0)
   in
 
   let help_cmd =
