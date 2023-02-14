@@ -2,6 +2,8 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
+let total_time = Atomic.make 0
+
 let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
   let mean_latency = H.mean hist |> ms
@@ -36,11 +38,13 @@ let print_percentiles json output hist =
           |> float_of_int |> ms |> string_of_float)
       |> String.concat ","
     in
+    Printf.fprintf oc "Total time: %d\n" (Atomic.get total_time);
     Printf.fprintf oc
       {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
       (int_of_float mean_latency)
       (int_of_float max_latency) distribs
   else (
+    Printf.fprintf oc "Total time: %d\n" (Atomic.get total_time);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -148,6 +152,7 @@ let latency json output exec_args =
     | Some (saved_phase, saved_ts) when saved_phase = phase ->
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
+        Atomic.set total_time @@ Atomic.fetch_and_add total_time latency;
         assert (H.record_value hist latency)
     | _ -> ()
   in
