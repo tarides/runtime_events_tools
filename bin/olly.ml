@@ -2,7 +2,7 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
-let total_time = Atomic.make 0
+let total_gc_time = Atomic.make 0
 
 let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
@@ -38,13 +38,11 @@ let print_percentiles json output hist =
           |> float_of_int |> ms |> string_of_float)
       |> String.concat ","
     in
-    Printf.fprintf oc "Total time: %d\n" (Atomic.get total_time);
     Printf.fprintf oc
       {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
       (int_of_float mean_latency)
       (int_of_float max_latency) distribs
   else (
-    Printf.fprintf oc "Total time: %d\n" (Atomic.get total_time);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -57,6 +55,10 @@ let print_percentiles json output hist =
     Fun.flip Array.iter percentiles (fun p ->
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
+
+let print_gc_time output =
+  let oc = match output with Some s -> open_out s | None -> stderr in
+  Printf.fprintf oc "Time in GC: %f\n" ((float_of_int (Atomic.get total_gc_time)) /. 1000000000.)
 
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
@@ -152,12 +154,37 @@ let latency json output exec_args =
     | Some (saved_phase, saved_ts) when saved_phase = phase ->
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        Atomic.set total_time @@ Atomic.fetch_and_add total_time latency;
         assert (H.record_value hist latency)
     | _ -> ()
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
+  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+
+let gc output exec_args =
+  let is_gc_phase phase =
+    match phase with
+    | "major" | "stw_leader" | "stw_handler" -> true
+    | _ -> false
+  in
+  let current_event = Hashtbl.create 13 in
+  let runtime_begin ring_id ts phase =
+    match Hashtbl.find_opt current_event ring_id with
+    | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
+    | _ -> ()
+  in
+  let runtime_end ring_id ts phase =
+    match Hashtbl.find_opt current_event ring_id with
+    | Some (saved_phase, saved_ts) when
+        (saved_phase = phase && is_gc_phase (Runtime_events.runtime_phase_name phase)) ->
+      Hashtbl.remove current_event ring_id;
+      let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
+      (* total_gc_time := !total_gc_time + latency *)
+      Atomic.set total_gc_time (Atomic.get total_gc_time + latency)
+    | _ -> ()
+  in
+  let init = Fun.id in
+  let cleanup () = print_gc_time output in
   olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let help man_format cmds topic =
@@ -251,6 +278,18 @@ let () =
     Cmd.v info Term.(const latency $ json_option $ output_option $ exec_args 0)
   in
 
+  let gc_cmd =
+    let man =
+      [
+        `S Manpage.s_description;
+        `P "Report the GC time.";
+        `Blocks help_secs;
+      ]
+    in
+    let doc = "Report the GC time." in
+    let info = Cmd.info "gc" ~doc ~sdocs ~man in
+    Cmd.v info Term.(const gc $ output_option $ exec_args 0)
+  in
   let help_cmd =
     let topic =
       let doc = "The topic to get help on. $(b,topics) lists the topics." in
@@ -272,7 +311,7 @@ let () =
   let main_cmd =
     let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info "olly" ~doc ~sdocs in
-    Cmd.group info [ trace_cmd; latency_cmd; help_cmd ]
+    Cmd.group info [ trace_cmd; latency_cmd; help_cmd; gc_cmd ]
   in
 
   exit (Cmd.eval main_cmd)
