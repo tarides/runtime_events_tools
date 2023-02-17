@@ -2,6 +2,10 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 open Cmdliner
 
+(** Trace format - either json or Fuchsia Trace Format (filenames typically ending in
+   .fxt). Fuchsia is a binary format viewable in Perfetto. *)
+type trace_format = Json | Fuchsia
+
 let total_gc_time = Atomic.make 0
 
 let print_percentiles json output hist =
@@ -112,31 +116,68 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   Unix.unlink ring_file;
   cleanup ()
 
-let trace trace_filename exec_args =
-  let trace_file = open_out trace_filename in
-  let ts_to_us ts = Int64.(div (Ts.to_int64 ts) (of_int 1000)) in
-  let runtime_begin ring_id ts phase =
-    Printf.fprintf trace_file
-      "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"B\", \"ts\":%Ld, \
-       \"pid\": %d, \"tid\": %d},\n"
-      (Runtime_events.runtime_phase_name phase)
-      (ts_to_us ts) ring_id ring_id;
-    flush trace_file
-  in
-  let runtime_end ring_id ts phase =
-    Printf.fprintf trace_file
-      "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"E\", \"ts\":%Ld, \
-       \"pid\": %d, \"tid\": %d},\n"
-      (Runtime_events.runtime_phase_name phase)
-      (ts_to_us ts) ring_id ring_id;
-    flush trace_file
-  in
-  let init () =
-    (* emit prefix in the tracefile *)
-    Printf.fprintf trace_file "["
-  in
-  let cleanup () = close_out trace_file in
-  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+let trace format trace_filename exec_args =
+  match format with
+  | Json ->
+      let trace_file = open_out trace_filename in
+      let ts_to_us ts = Int64.(div (Ts.to_int64 ts) (of_int 1000)) in
+      let runtime_begin ring_id ts phase =
+        Printf.fprintf trace_file
+          "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"B\", \"ts\":%Ld, \
+           \"pid\": %d, \"tid\": %d},\n"
+          (Runtime_events.runtime_phase_name phase)
+          (ts_to_us ts) ring_id ring_id;
+        flush trace_file
+      in
+      let runtime_end ring_id ts phase =
+        Printf.fprintf trace_file
+          "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"E\", \"ts\":%Ld, \
+           \"pid\": %d, \"tid\": %d},\n"
+          (Runtime_events.runtime_phase_name phase)
+          (ts_to_us ts) ring_id ring_id;
+        flush trace_file
+      in
+      let init () =
+        (* emit prefix in the tracefile *)
+        Printf.fprintf trace_file "["
+      in
+      let cleanup () = close_out trace_file in
+      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+  | Fuchsia ->
+      let open Tracing in
+      let trace_file =
+        Trace.create_for_file ~base_time:None ~filename:trace_filename
+      in
+      (* Note: Fuchsia timestamps are nanoseconds
+         https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format#timestamps so no need
+         to scale as is done in [ts_to_us] above *)
+      let ts_to_int ts = ts |> Ts.to_int64 |> Int64.to_int in
+      let int_to_span i = Core.Time_ns.Span.of_int_ns i in
+      let doms =
+        (* Allocate all domains before starting to write trace; as above we identify the
+           thread id with the ring_id used by runtime events. This pre-allocation consumes
+           about 7kB in the trace file. *)
+        let max_doms = 128 in
+        Array.init max_doms (fun i ->
+            (* Use a different pid for each domain *)
+            Trace.allocate_thread trace_file ~pid:i
+              ~name:(Printf.sprintf "Ring_id %d" i))
+      in
+      let runtime_begin ring_id ts phase =
+        let thread = doms.(ring_id) in
+        Trace.write_duration_begin trace_file ~args:[] ~thread ~category:"PERF"
+          ~name:(Runtime_events.runtime_phase_name phase)
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
+      let runtime_end ring_id ts phase =
+        let thread = doms.(ring_id) in
+        Trace.write_duration_end trace_file ~args:[] ~thread ~category:"PERF"
+          ~name:(Runtime_events.runtime_phase_name phase)
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
+      let init () = () in
+      let cleanup () = Trace.close trace_file in
+      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
 
 let latency json output exec_args =
   let current_event = Hashtbl.create 13 in
@@ -232,6 +273,17 @@ let () =
     Arg.(required & pos p (some string) None & info [] ~docv:"EXECUTABLE" ~doc)
   in
 
+  let format_option =
+    let doc =
+      "Format of the target trace, either \"json\" (for Chrome tracing) or \
+       \"fuchsia\" (Perfetto)."
+    in
+    Arg.(
+      value
+      & opt (enum [ ("json", Json); ("fuchsia", Fuchsia) ]) Fuchsia
+      & info [ "f"; "format" ] ~docv:"format" ~doc)
+  in
+
   let trace_cmd =
     let trace_filename =
       let doc = "Target trace file name." in
@@ -240,13 +292,13 @@ let () =
     let man =
       [
         `S Manpage.s_description;
-        `P "Save the runtime trace in Chrome trace format.";
+        `P "Save the runtime trace to file.";
         `Blocks help_secs;
       ]
     in
-    let doc = "Save the runtime trace in Chrome trace format." in
+    let doc = "Save the runtime trace to file." in
     let info = Cmd.info "trace" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const trace $ trace_filename $ exec_args 1)
+    Cmd.v info Term.(const trace $ format_option $ trace_filename $ exec_args 1)
   in
 
   let json_option =
