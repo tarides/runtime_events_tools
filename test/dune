@@ -1,0 +1,8 @@
+(executable
+ (name binarytrees)
+ (modules binarytrees))
+
+; (rule
+;  (deps (:olly ../bin/olly.exe) (:prog binarytrees.exe))
+;  (targets out.txt)
+;  (action (with-stdout-to %{targets} (run %{olly} gc %{prog}) )))
