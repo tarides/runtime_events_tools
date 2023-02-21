@@ -8,6 +8,7 @@ type trace_format = Json | Fuchsia
 
 let total_gc_time = Atomic.make 0
 let start_time = ref 0.0
+let end_time = ref 0.0
 
 let lifecycle _domain_id _ts lifecycle_event data =
   match lifecycle_event with
@@ -18,6 +19,13 @@ let lifecycle _domain_id _ts lifecycle_event data =
           | None -> false);
           start_time := Unix.gettimeofday ()
       end
+  | Runtime_events.EV_RING_STOP ->
+    begin
+      assert (match data with
+      | Some _ -> true
+      | None -> false);
+    end_time := Unix.gettimeofday ()
+    end
   | _ -> ()
 
 let print_percentiles json output hist =
@@ -47,7 +55,7 @@ let print_percentiles json output hist =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let total_time = Unix.gettimeofday () -. !start_time in
+  let total_time = !end_time -. !start_time in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
