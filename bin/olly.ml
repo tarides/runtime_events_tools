@@ -56,6 +56,7 @@ let print_percentiles json output hist =
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
   let total_time = !end_time -. !start_time in
+  let gc_time = ((float_of_int (Atomic.get total_gc_time)) /. 1000000000.) in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -70,8 +71,9 @@ let print_percentiles json output hist =
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
-    Printf.fprintf oc "#[Wall-time (s):\t%.2f,\t GC-time (s):\t%.2f]\n" total_time
-    ((float_of_int (Atomic.get total_gc_time)) /. 1000000000.);
+    Printf.fprintf oc "Wall time (s):\t%.2f\n" total_time;
+    Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
+    Printf.fprintf oc "GC overhead (%% of wall time):\t%.2f%%\n" ((gc_time /. total_time) *. 100.);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
