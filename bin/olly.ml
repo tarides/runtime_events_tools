@@ -7,7 +7,18 @@ open Cmdliner
 type trace_format = Json | Fuchsia
 
 let total_gc_time = Atomic.make 0
-let start_time = Unix.gettimeofday ()
+let start_time = ref 0.0
+
+let lifecycle _domain_id _ts lifecycle_event data =
+  match lifecycle_event with
+  | Runtime_events.EV_RING_START ->
+      begin
+          assert(match data with
+          | Some _ -> true
+          | None -> false);
+          start_time := Unix.gettimeofday ()
+      end
+  | _ -> ()
 
 let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
@@ -36,7 +47,7 @@ let print_percentiles json output hist =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let total_time = Unix.gettimeofday () -. start_time in
+  let total_time = Unix.gettimeofday () -. !start_time in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -69,7 +80,7 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
+let olly ~runtime_begin ~runtime_end ~lifecycle ~cleanup ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -94,7 +105,7 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
   let callbacks =
-    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lost_events ()
+    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle ~lost_events ()
   in
   let child_alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
@@ -144,7 +155,7 @@ let trace format trace_filename exec_args =
         Printf.fprintf trace_file "["
       in
       let cleanup () = close_out trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
   | Fuchsia ->
       let open Tracing in
       let trace_file =
@@ -179,7 +190,7 @@ let trace format trace_filename exec_args =
       in
       let init () = () in
       let cleanup () = Trace.close trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
 let latency json output exec_args =
   let current_event = Hashtbl.create 13 in
@@ -210,7 +221,7 @@ let latency json output exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+  olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup  exec_args
 
 let help man_format cmds topic =
   match topic with
