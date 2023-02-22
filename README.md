@@ -62,16 +62,23 @@ Percentile       Latency (ms)
 100.0000         39.75
 ```
 
-`olly trace` will record the runtime trace log in Chrome tracing format.
+`olly trace` will record the runtime trace log in Chrome tracing format or
+Fuchsia trace format. Format of the trace file can be specified with the
+`--format` option. The default format is Fuchsia.
 
 ```bash
-$ olly trace menhir_sysver.trace 'menhir -v --table sysver.mly'
+$ olly trace --format=fuchsia menhir_sysver.trace 'menhir -v --table sysver.mly' # Fuchsia format
+<snip>
+$ ls menhir_sysver.trace
+menhir_sysver.trace
+
+$ olly trace --format=json menhir_sysver.trace 'menhir -v --table sysver.mly' # Chrome tracing format
 <snip>
 $ ls menhir_sysver.trace
 menhir_sysver.trace
 ```
 
-This trace can be viewed in [perfetto trace viewer](https://ui.perfetto.dev/).
+This trace can be viewed in [perfetto trace viewer](https://ui.perfetto.dev/). Chrome format trace can also be viewed in [chrome://tracing](chrome://tracing) in chromium based browsers.
 
 ![image](https://user-images.githubusercontent.com/410484/175475118-b08cbf06-a939-4edb-9336-20dfd464bb1b.png)
 
