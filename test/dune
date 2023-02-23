@@ -1,8 +1,10 @@
-(executable
- (name binarytrees)
- (modules binarytrees))
+; run menhir test
 
-; (rule
-;  (deps (:olly ../bin/olly.exe) (:prog binarytrees.exe))
-;  (targets out.txt)
-;  (action (with-stdout-to %{targets} (run %{olly} gc %{prog}) )))
+(alias
+ (name olly)
+ (deps ../bin/olly.exe))
+
+(rule
+ (deps (alias olly) ocaml.mly)
+ (targets out.txt)
+ (action (with-stdout-to %{targets} (run olly gc-stats "menhir ocaml.mly"))))
