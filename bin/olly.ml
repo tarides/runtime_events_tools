@@ -10,22 +10,12 @@ let total_gc_time = Atomic.make 0
 let start_time = ref 0.0
 let end_time = ref 0.0
 
-let lifecycle _domain_id _ts lifecycle_event data =
+let lifecycle _domain_id _ts lifecycle_event _data =
   match lifecycle_event with
   | Runtime_events.EV_RING_START ->
-      begin
-          assert(match data with
-          | Some _ -> true
-          | None -> false);
-          start_time := Unix.gettimeofday ()
-      end
+      start_time := Unix.gettimeofday ()
   | Runtime_events.EV_RING_STOP ->
-    begin
-      assert (match data with
-      | Some _ -> true
-      | None -> false);
-    end_time := Unix.gettimeofday ()
-    end
+      end_time := Unix.gettimeofday ()
   | _ -> ()
 
 let print_percentiles json output hist =
@@ -202,7 +192,7 @@ let trace format trace_filename exec_args =
       let cleanup () = Trace.close trace_file in
       olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
-let latency json output exec_args =
+let gc_stats json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -210,7 +200,7 @@ let latency json output exec_args =
   in
   let is_gc_phase phase =
     match phase with
-    | "major" | "stw_leader" | "stw_handler" -> true
+    | "major" | "stw_leader" | "interrupt_remote" -> true
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
@@ -332,7 +322,7 @@ let () =
     in
     let doc = "Report the GC latency profile." in
     let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const latency $ json_option $ output_option $ exec_args 0)
+    Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
   in
 
   let help_cmd =
