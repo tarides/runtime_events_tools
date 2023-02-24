@@ -12,10 +12,8 @@ let end_time = ref 0.0
 
 let lifecycle _domain_id _ts lifecycle_event _data =
   match lifecycle_event with
-  | Runtime_events.EV_RING_START ->
-      start_time := Unix.gettimeofday ()
-  | Runtime_events.EV_RING_STOP ->
-      end_time := Unix.gettimeofday ()
+  | Runtime_events.EV_RING_START -> start_time := Unix.gettimeofday ()
+  | Runtime_events.EV_RING_STOP -> end_time := Unix.gettimeofday ()
   | _ -> ()
 
 let print_percentiles json output hist =
@@ -46,7 +44,7 @@ let print_percentiles json output hist =
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
   let total_time = !end_time -. !start_time in
-  let gc_time = ((float_of_int (!total_gc_time)) /. 1000000000.) in
+  let gc_time = float_of_int !total_gc_time /. 1000000000. in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -63,7 +61,8 @@ let print_percentiles json output hist =
     Printf.fprintf oc "Execution times:\n";
     Printf.fprintf oc "Wall time (s):\t%.2f\n" total_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
-    Printf.fprintf oc "GC overhead (%% of wall time):\t%.2f%%\n" ((gc_time /. total_time) *. 100.);
+    Printf.fprintf oc "GC overhead (%% of wall time):\t%.2f%%\n"
+      (gc_time /. total_time *. 100.);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -105,7 +104,8 @@ let olly ~runtime_begin ~runtime_end ~lifecycle ~cleanup ~init exec_args =
   Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
   let callbacks =
-    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle ~lost_events ()
+    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle
+      ~lost_events ()
   in
   let child_alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
@@ -200,30 +200,29 @@ let gc_stats json output exec_args =
   in
   let is_gc_phase phase =
     match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER | Runtime_events.EV_INTERRUPT_REMOTE -> true
+    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
+    | Runtime_events.EV_INTERRUPT_REMOTE ->
+        true
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
-    if (is_gc_phase phase) then begin
-    match Hashtbl.find_opt current_event ring_id with
-    | None ->
-        Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-    | _ -> ()
-    end
+    if is_gc_phase phase then
+      match Hashtbl.find_opt current_event ring_id with
+      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
+      | _ -> ()
   in
   let runtime_end ring_id ts phase =
     match Hashtbl.find_opt current_event ring_id with
-    | Some (saved_phase, saved_ts) when saved_phase = phase -> begin
+    | Some (saved_phase, saved_ts) when saved_phase = phase ->
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
         assert (H.record_value hist latency);
         total_gc_time := !total_gc_time + latency
-      end
     | _ -> ()
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup  exec_args
+  olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
 let help man_format cmds topic =
   match topic with

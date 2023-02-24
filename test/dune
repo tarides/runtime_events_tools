@@ -6,5 +6,8 @@
 
 (rule
  (alias runtest)
- (deps (alias olly) ocaml.mly)
- (action  (run olly gc-stats "menhir ocaml.mly")))
+ (deps
+  (alias olly)
+  ocaml.mly)
+ (action
+  (run olly gc-stats "menhir ocaml.mly")))
