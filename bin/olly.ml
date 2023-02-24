@@ -6,7 +6,7 @@ open Cmdliner
    .fxt). Fuchsia is a binary format viewable in Perfetto. *)
 type trace_format = Json | Fuchsia
 
-let total_gc_time = Atomic.make 0
+let total_gc_time = ref 0
 let start_time = ref 0.0
 let end_time = ref 0.0
 
@@ -46,7 +46,7 @@ let print_percentiles json output hist =
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
   let total_time = !end_time -. !start_time in
-  let gc_time = ((float_of_int (Atomic.get total_gc_time)) /. 1000000000.) in
+  let gc_time = ((float_of_int (!total_gc_time)) /. 1000000000.) in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -205,7 +205,9 @@ let gc_stats json output exec_args =
   in
   let runtime_begin ring_id ts phase =
     match Hashtbl.find_opt current_event ring_id with
-    | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
+    | None when
+      (is_gc_phase (Runtime_events.runtime_phase_name phase)) ->
+        Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
     | _ -> ()
   in
   let runtime_end ring_id ts phase =
@@ -214,8 +216,7 @@ let gc_stats json output exec_args =
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
         assert (H.record_value hist latency);
-        if is_gc_phase (Runtime_events.runtime_phase_name phase) then
-          Atomic.set total_gc_time (Atomic.get total_gc_time + latency)
+        total_gc_time := !total_gc_time + latency
       end
     | _ -> ()
   in
