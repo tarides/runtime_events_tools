@@ -5,6 +5,6 @@
  (deps ../bin/olly.exe))
 
 (rule
+ (alias runtest)
  (deps (alias olly) ocaml.mly)
- (targets out.txt)
- (action (with-stdout-to %{targets} (run olly gc-stats "menhir ocaml.mly"))))
+ (action  (run olly gc-stats "menhir ocaml.mly")))
