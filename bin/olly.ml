@@ -200,15 +200,16 @@ let gc_stats json output exec_args =
   in
   let is_gc_phase phase =
     match phase with
-    | "major" | "stw_leader" | "interrupt_remote" -> true
+    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER | Runtime_events.EV_INTERRUPT_REMOTE -> true
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
+    if (is_gc_phase phase) then begin
     match Hashtbl.find_opt current_event ring_id with
-    | None when
-      (is_gc_phase (Runtime_events.runtime_phase_name phase)) ->
+    | None ->
         Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
     | _ -> ()
+    end
   in
   let runtime_end ring_id ts phase =
     match Hashtbl.find_opt current_event ring_id with
