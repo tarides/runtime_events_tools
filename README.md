@@ -5,10 +5,14 @@ introduced in OCaml 5.0.
 
 ## olly
 
+olly provides a number of sub-commands.
+
+### gc-stats
+
 `olly gc-stats` will report the GC running time and GC tail latency profile of an OCaml executable.
 
 ```bash
-$ olly gc-stats 'binarytrees.exe 22'
+$ olly gc-stats 'binarytrees.exe 22' # Use quotes for commands with arguments
 Execution times:
 Wall time (s):  21.45
 GC time (s):    14.33
@@ -40,7 +44,7 @@ Percentile       Latency (ms)
 ```
 
 ```bash
-$ olly latency 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
+$ olly gc-stats 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
 <snip>
 Execution times:
 Wall time (s):  68.51
@@ -72,6 +76,8 @@ Percentile       Latency (ms)
 100.0000         42.89
 ```
 
+### trace
+
 `olly trace` will record the runtime trace log in 
 [Fuchsia trace format](https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format) 
 or
@@ -91,7 +97,7 @@ $ ls menhir_sysver.trace
 menhir_sysver.trace
 ```
 
-Traces in either formats can be viewed in [perfetto trace viewer](https://ui.perfetto.dev/). Chrome format trace can also be viewed in [chrome://tracing](chrome://tracing) in chromium based browsers.
+Traces in either formats can be viewed in [perfetto trace viewer](https://ui.perfetto.dev/). Chrome format trace can also be viewed in `chrome://tracing` in chromium-based browsers.
 
 ![image](https://user-images.githubusercontent.com/410484/175475118-b08cbf06-a939-4edb-9336-20dfd464bb1b.png)
 
