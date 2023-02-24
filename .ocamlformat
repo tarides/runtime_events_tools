@@ -1,0 +1,4 @@
+version = 0.24.1
+profile = conventional
+
+ocaml-version = 5.0.0

@@ -6,6 +6,16 @@ open Cmdliner
    .fxt). Fuchsia is a binary format viewable in Perfetto. *)
 type trace_format = Json | Fuchsia
 
+let total_gc_time = ref 0
+let start_time = ref 0.0
+let end_time = ref 0.0
+
+let lifecycle _domain_id _ts lifecycle_event _data =
+  match lifecycle_event with
+  | Runtime_events.EV_RING_START -> start_time := Unix.gettimeofday ()
+  | Runtime_events.EV_RING_STOP -> end_time := Unix.gettimeofday ()
+  | _ -> ()
+
 let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
   let mean_latency = H.mean hist |> ms
@@ -33,6 +43,8 @@ let print_percentiles json output hist =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
+  let total_time = !end_time -. !start_time in
+  let gc_time = float_of_int !total_gc_time /. 1000000000. in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -45,6 +57,12 @@ let print_percentiles json output hist =
       (int_of_float mean_latency)
       (int_of_float max_latency) distribs
   else (
+    Printf.fprintf oc "\n";
+    Printf.fprintf oc "Execution times:\n";
+    Printf.fprintf oc "Wall time (s):\t%.2f\n" total_time;
+    Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
+    Printf.fprintf oc "GC overhead (%% of wall time):\t%.2f%%\n"
+      (gc_time /. total_time *. 100.);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -61,7 +79,7 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
+let olly ~runtime_begin ~runtime_end ~lifecycle ~cleanup ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -86,7 +104,8 @@ let olly ~runtime_begin ~runtime_end ~cleanup ~init exec_args =
   Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
   let callbacks =
-    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lost_events ()
+    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle
+      ~lost_events ()
   in
   let child_alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
@@ -136,7 +155,7 @@ let trace format trace_filename exec_args =
         Printf.fprintf trace_file "["
       in
       let cleanup () = close_out trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
   | Fuchsia ->
       let open Tracing in
       let trace_file =
@@ -171,30 +190,39 @@ let trace format trace_filename exec_args =
       in
       let init () = () in
       let cleanup () = Trace.close trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
-let latency json output exec_args =
+let gc_stats json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
       ~significant_figures:3
   in
+  let is_gc_phase phase =
+    match phase with
+    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
+    | Runtime_events.EV_INTERRUPT_REMOTE ->
+        true
+    | _ -> false
+  in
   let runtime_begin ring_id ts phase =
-    match Hashtbl.find_opt current_event ring_id with
-    | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-    | _ -> ()
+    if is_gc_phase phase then
+      match Hashtbl.find_opt current_event ring_id with
+      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
+      | _ -> ()
   in
   let runtime_end ring_id ts phase =
     match Hashtbl.find_opt current_event ring_id with
     | Some (saved_phase, saved_ts) when saved_phase = phase ->
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        assert (H.record_value hist latency)
+        assert (H.record_value hist latency);
+        total_gc_time := !total_gc_time + latency
     | _ -> ()
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  olly ~runtime_begin ~runtime_end ~init ~cleanup exec_args
+  olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
 let help man_format cmds topic =
   match topic with
@@ -285,7 +313,7 @@ let () =
       & info [ "o"; "output" ] ~docv:"output" ~doc)
   in
 
-  let latency_cmd =
+  let gc_stats_cmd =
     let man =
       [
         `S Manpage.s_description;
@@ -294,8 +322,8 @@ let () =
       ]
     in
     let doc = "Report the GC latency profile." in
-    let info = Cmd.info "latency" ~doc ~sdocs ~man in
-    Cmd.v info Term.(const latency $ json_option $ output_option $ exec_args 0)
+    let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
+    Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
   in
 
   let help_cmd =
@@ -319,7 +347,7 @@ let () =
   let main_cmd =
     let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info "olly" ~doc ~sdocs in
-    Cmd.group info [ trace_cmd; latency_cmd; help_cmd ]
+    Cmd.group info [ trace_cmd; gc_stats_cmd; help_cmd ]
   in
 
   exit (Cmd.eval main_cmd)

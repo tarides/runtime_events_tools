@@ -1,0 +1,13 @@
+; run menhir test
+
+(alias
+ (name olly)
+ (deps ../bin/olly.exe))
+
+(rule
+ (alias runtest)
+ (deps
+  (alias olly)
+  ocaml.mly)
+ (action
+  (run olly gc-stats "menhir ocaml.mly")))
