@@ -79,7 +79,15 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ~runtime_begin ~runtime_end ~lifecycle ~cleanup ~init exec_args =
+let add_optional_callback type' fn ev =
+  (match fn with
+  | None -> ev
+  | Some fn ->
+    Runtime_events.Callbacks.add_user_event type' fn ev)
+
+
+let olly ~runtime_begin ~runtime_end ?eio_id_label ?span ?int ?unit ~cleanup
+    ~lifecycle ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -106,6 +114,10 @@ let olly ~runtime_begin ~runtime_end ~lifecycle ~cleanup ~init exec_args =
   let callbacks =
     Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle
       ~lost_events ()
+    |> add_optional_callback Eio.Private.Ctf.labelled_type eio_id_label
+    |> add_optional_callback Runtime_events.Type.span span
+    |> add_optional_callback Runtime_events.Type.int int
+    |> add_optional_callback Runtime_events.Type.unit unit
   in
   let child_alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
@@ -176,6 +188,40 @@ let trace format trace_filename exec_args =
             Trace.allocate_thread trace_file ~pid:i
               ~name:(Printf.sprintf "Ring_id %d" i))
       in
+      let eio_id_label ring_id ts _ev (_id, label) =
+        let thread = doms.(ring_id) in
+        Trace.write_duration_instant trace_file ~args:[] ~thread ~category:"PERF"
+          ~name:label
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
+      let span ring_id ts ev value =
+        let thread = doms.(ring_id) in
+        let name = Runtime_events.User.name ev in
+        let fn =
+          if value = Runtime_events.Type.Begin then
+            Trace.write_duration_begin
+          else Trace.write_duration_end
+        in
+        fn trace_file ~args:[] ~thread ~category:"PERF"
+          ~name
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
+      let int ring_id ts ev value =
+        let thread = doms.(ring_id) in
+        let name = Runtime_events.User.name ev in
+        Trace.write_counter trace_file ~args:[("v", Int value)] ~thread
+          ~category:"PERF"
+          ~name
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
+      let unit ring_id ts ev () =
+        let thread = doms.(ring_id) in
+        let name = Runtime_events.User.name ev in
+        Trace.write_duration_instant trace_file ~args:[] ~thread
+          ~category:"PERF"
+          ~name
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
       let runtime_begin ring_id ts phase =
         let thread = doms.(ring_id) in
         Trace.write_duration_begin trace_file ~args:[] ~thread ~category:"PERF"
@@ -190,7 +236,8 @@ let trace format trace_filename exec_args =
       in
       let init () = () in
       let cleanup () = Trace.close trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+      olly ~runtime_begin ~runtime_end ~eio_id_label ~span ~int ~unit ~init
+        ~lifecycle ~cleanup exec_args
 
 let gc_stats json output exec_args =
   let current_event = Hashtbl.create 13 in
