@@ -13,6 +13,7 @@
 
 (package
  (name runtime_events_tools)
+ (sites (lib plugins))
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml")
  (depends
