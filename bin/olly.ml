@@ -53,9 +53,8 @@ let print_percentiles json output hist =
       |> String.concat ","
     in
     Printf.fprintf oc
-      {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
-      (int_of_float mean_latency)
-      (int_of_float max_latency) distribs
+      {|{"mean_latency": %f, "max_latency": %f, "distr_latency": [%s]}|}
+      mean_latency max_latency distribs
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
