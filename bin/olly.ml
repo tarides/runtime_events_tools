@@ -48,14 +48,17 @@ let print_percentiles json output hist =
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
-          H.value_at_percentile hist percentiles.(i)
-          |> float_of_int |> ms |> string_of_float)
+          let percentile = percentiles.(i) in
+          let value =
+            H.value_at_percentile hist percentiles.(i)
+            |> float_of_int |> ms |> string_of_float
+          in
+          Printf.sprintf "\"%.4f\": %s" percentile value)
       |> String.concat ","
     in
     Printf.fprintf oc
-      {|{"mean_latency": %d, "max_latency": %d, "distr_latency": [%s]}|}
-      (int_of_float mean_latency)
-      (int_of_float max_latency) distribs
+      {|{"mean_latency": %f, "max_latency": %f, "distr_latency": {%s}}|}
+      mean_latency max_latency distribs
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
