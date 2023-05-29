@@ -2,11 +2,11 @@
 opam-version: "2.0"
 synopsis: "Tools for the runtime events tracing system in OCaml"
 description: "Various tools for the runtime events tracing system in OCaml"
-maintainer: ["Sadiq Jaffer"]
+maintainer: ["Sadiq Jaffer" "KC Sivaramakrishnan" "Sudha Parimala"]
 authors: ["Sadiq Jaffer"]
 license: "ISC"
-homepage: "https://github.com/sadiqj/runtime_events_tools"
-bug-reports: "https://github.com/sadiqj/runtime_events_tools/issues"
+homepage: "https://github.com/tarides/runtime_events_tools"
+bug-reports: "https://github.com/tarides/runtime_events_tools/issues"
 depends: [
   "dune" {>= "3.2"}
   "ocaml" {>= "5.0.0~"}
@@ -14,6 +14,7 @@ depends: [
   "hdr_histogram"
   "cmdliner"
   "tracing"
+  "menhir" {with-test}
   "odoc" {with-doc}
 ]
 build: [
@@ -30,4 +31,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/sadiqj/runtime_events_tools.git"
+dev-repo: "git+https://github.com/tarides/runtime_events_tools.git"
