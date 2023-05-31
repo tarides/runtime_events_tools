@@ -1,5 +1,3 @@
-## Changes
-
 ### v0.4
 
 * Fix dependencies (#14, @Sudha247)
