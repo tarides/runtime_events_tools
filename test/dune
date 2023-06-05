@@ -1,5 +1,8 @@
 ; run menhir test
-
+(env
+ (_
+  (env-vars (OCAML_RUNTIME_EVENTS_DIR "/tmp/"))))
+ 
 (alias
  (name olly)
  (deps ../bin/olly.exe))
