@@ -2,15 +2,11 @@
 (env
  (_
   (env-vars (OCAML_RUNTIME_EVENTS_DIR "/tmp/"))))
- 
 (alias
  (name olly)
  (deps ../bin/olly.exe))
 
 (rule
  (alias runtest)
- (deps
-  (alias olly)
-  ocaml.mly)
  (action
-  (run olly gc-stats "menhir ocaml.mly")))
+  (run olly gc-stats ocamlc)))

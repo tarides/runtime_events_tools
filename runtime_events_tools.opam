@@ -14,7 +14,6 @@ depends: [
   "hdr_histogram"
   "cmdliner"
   "tracing"
-  "core" { < "v0.16.0"}
   "menhir" {with-test}
   "odoc" {with-doc}
 ]
