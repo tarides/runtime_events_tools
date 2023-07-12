@@ -82,8 +82,8 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ?extra ~runtime_begin ~runtime_end ~cleanup
-    ~lifecycle ~init exec_args =
+let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
+    =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -196,8 +196,8 @@ let trace format trace_filename exec_args =
       let extra = Olly_custom_events.v trace_file doms in
       let init () = () in
       let cleanup () = Trace.close trace_file in
-      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle
-        ~cleanup exec_args
+      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup
+        exec_args
 
 let gc_stats json output exec_args =
   let current_event = Hashtbl.create 13 in
