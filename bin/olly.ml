@@ -10,19 +10,18 @@ type ts = { mutable start_time : float; mutable end_time : float }
 
 let total_gc_time = ref 0
 let wall_time = { start_time = 0.; end_time = 0. }
-let domain_cpu_times = Hashtbl.create 128
+let total_cpu_time = ref 0.
 let domain_gc_times = Array.make 128 0
 
-let lifecycle domain_id _ts lifecycle_event _data =
+let lifecycle _domain_id _ts lifecycle_event _data =
   match lifecycle_event with
   | Runtime_events.EV_RING_START -> wall_time.start_time <- Unix.gettimeofday ()
-  | Runtime_events.EV_RING_STOP -> wall_time.end_time <- Unix.gettimeofday ()
-  | Runtime_events.EV_DOMAIN_SPAWN ->
-      Hashtbl.add domain_cpu_times domain_id
-        { start_time = Unix.gettimeofday (); end_time = 0. }
-  | Runtime_events.EV_DOMAIN_TERMINATE ->
-      let current_domain = Hashtbl.find domain_cpu_times domain_id in
-      current_domain.end_time <- Unix.gettimeofday ()
+  | Runtime_events.EV_RING_STOP ->
+    begin
+      wall_time.end_time <- Unix.gettimeofday ();
+      let times = Unix.times () in
+      total_cpu_time := times.tms_utime +. times.tms_cutime
+    end
   | _ -> ()
 
 let print_percentiles json output hist =
@@ -54,11 +53,6 @@ let print_percentiles json output hist =
   let oc = match output with Some s -> open_out s | None -> stderr in
   let to_sec x = float_of_int x /. 1000000000. in
   let real_time = wall_time.end_time -. wall_time.start_time in
-  let total_cpu_time =
-    Hashtbl.fold
-      (fun _k d l -> d.end_time -. d.start_time +. l)
-      domain_cpu_times real_time
-  in
   let gc_time = to_sec !total_gc_time in
   if json then
     let distribs =
@@ -78,10 +72,10 @@ let print_percentiles json output hist =
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
     Printf.fprintf oc "Wall time (s):\t%.2f\n" real_time;
-    Printf.fprintf oc "CPU time (s):\t%.2f\n" total_cpu_time;
+    Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
-      (gc_time /. total_cpu_time *. 100.);
+      (gc_time /. !total_cpu_time *. 100.);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC time per domain (s):\n";
     Array.iteri
