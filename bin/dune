@@ -1,5 +1,19 @@
 (executable
  (public_name olly)
  (name olly)
- (modules olly)
+ (modules olly olly_custom_events)
  (libraries runtime_events unix hdr_histogram cmdliner tracing))
+
+(rule
+ (target olly_custom_events.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (action
+  (copy olly_custom_events.yes.ml %{target})))
+
+(rule
+ (target olly_custom_events.ml)
+ (enabled_if
+  (< %{ocaml_version} 5.1.0))
+ (action
+  (copy olly_custom_events.no.ml %{target})))
