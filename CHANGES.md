@@ -1,3 +1,7 @@
+### dev
+
+* olly trace: ingest custom events starting from OCaml 5.1
+
 ### 0.4.0
 
 * Fix dependencies (#14, @Sudha247)

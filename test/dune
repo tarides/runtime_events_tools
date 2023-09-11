@@ -26,3 +26,21 @@
   test_gc_stats.exe)
  (action
   (run olly gc-stats "./test_gc_stats.exe 19")))
+
+(rule
+ (alias trace)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (target test.trace)
+ (deps
+  (alias olly)
+  test.exe)
+ (action
+  (progn
+   (run olly trace test.trace ./test.exe))))
+
+(executable
+ (name test)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (libraries runtime_events unix))
