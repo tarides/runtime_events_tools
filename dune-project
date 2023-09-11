@@ -1,7 +1,7 @@
 (lang dune 3.2)
 
 (name runtime_events_tools)
-
+(version "0.4.0")
 (generate_opam_files true)
 
 (source
