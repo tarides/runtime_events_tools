@@ -155,12 +155,13 @@ let trace format trace_filename exec_args =
           (ts_to_us ts) ring_id ring_id;
         flush trace_file
       in
+      let extra = Olly_custom_events.v_json trace_file in
       let init () =
         (* emit prefix in the tracefile *)
         Printf.fprintf trace_file "["
       in
       let cleanup () = close_out trace_file in
-      olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
   | Fuchsia ->
       let open Tracing in
       let trace_file =
