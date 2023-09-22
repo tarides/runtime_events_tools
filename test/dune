@@ -5,7 +5,8 @@
  (deps ../bin/olly.exe))
 
 (executable
- (name test_gc_stats))
+ (name test_gc_stats)
+ (modules test_gc_stats))
 
 ; (alias
 ;  (name test-gc)
@@ -41,6 +42,7 @@
 
 (executable
  (name test)
+ (modules test)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (libraries runtime_events unix))
