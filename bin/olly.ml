@@ -17,11 +17,9 @@ let lifecycle _domain_id _ts lifecycle_event _data =
   match lifecycle_event with
   | Runtime_events.EV_RING_START -> wall_time.start_time <- Unix.gettimeofday ()
   | Runtime_events.EV_RING_STOP ->
-    begin
       wall_time.end_time <- Unix.gettimeofday ();
       let times = Unix.times () in
       total_cpu_time := times.tms_utime +. times.tms_cutime
-    end
   | _ -> ()
 
 let print_percentiles json output hist =
