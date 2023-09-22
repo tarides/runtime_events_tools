@@ -4,13 +4,29 @@
  (name olly)
  (deps ../bin/olly.exe))
 
+(executable
+ (name test_gc_stats)
+ (modules test_gc_stats))
+
+; (alias
+;  (name test-gc)
+;  (deps ../_build/default/test/test_gc_stats.exe))
+
+; (rule
+;  (alias runtest)
+;  (deps
+;   (alias olly)
+;   (alias test-gc))
+;  (action
+;   (run olly gc-stats "_build/default/test/test_gc_stats.exe")))
+
 (rule
  (alias runtest)
  (deps
   (alias olly)
-  ocaml.mly)
+  test_gc_stats.exe)
  (action
-  (run olly gc-stats "menhir ocaml.mly")))
+  (run olly gc-stats "./test_gc_stats.exe 19")))
 
 (rule
  (alias trace)
@@ -26,6 +42,7 @@
 
 (executable
  (name test)
+ (modules test)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (libraries runtime_events unix))

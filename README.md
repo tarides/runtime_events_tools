@@ -11,69 +11,89 @@ olly provides a number of sub-commands.
 
 `olly gc-stats` will report the GC running time and GC tail latency profile of an OCaml executable.
 
+| Metric             | Description                                                                                                                                   |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| Wall time          | Real execution time of the program                                                                                                            |
+| CPU time           | Total CPU time across all domains                                                                                                             |
+| GC time            | Total time spent by the program performing garbage collection (major and minor)                                                               |
+| GC overhead        | Percentage of time taken up by GC against the total execution time                                                                            |
+| GC time per domain | Time spent by every domain performing garbage collection (major and minor cycles). Domains are reported with their domain ID (e.g. `Domain0`) |
+| GC latency profile | Mean, standard deviation and percentile latency profile of GC events.                                                                         |
+
+
 ```bash
-$ olly gc-stats 'binarytrees.exe 22' # Use quotes for commands with arguments
+$ olly gc-stats 'binarytrees.exe 19' # Use quotes for commands with arguments
 Execution times:
-Wall time (s):  21.45
-GC time (s):    14.33
-GC overhead (% of wall time):   66.79%
+Wall time (s):	2.01
+CPU time (s):	5.73
+GC time (s):	3.15
+GC overhead (% of CPU time):	55.00%
+
+GC time per domain (s):
+Domain0: 	1.15
+Domain1: 	0.99
+Domain2: 	1.01
 
 GC latency profile:
-#[Mean (ms):    0.92,    Stddev (ms):   1.54]
-#[Min (ms):     0.00,    max (ms):      11.06]
+#[Mean (ms):	0.88,	 Stddev (ms):	1.67]
+#[Min (ms):	0.00,	 max (ms):	13.21]
 
-Percentile       Latency (ms)
-25.0000          0.00
-50.0000          0.09
-60.0000          0.42
-70.0000          1.05
-75.0000          1.33
-80.0000          1.97
-85.0000          2.22
-90.0000          2.60
-95.0000          3.45
-96.0000          4.77
-97.0000          6.52
-98.0000          6.82
-99.0000          7.20
-99.9000          7.58
-99.9900          7.86
-99.9990          11.06
-99.9999          11.06
-100.0000         11.06
+Percentile 	 Latency (ms)
+25.0000 	 0.01
+50.0000 	 0.04
+60.0000 	 0.13
+70.0000 	 0.45
+75.0000 	 0.79
+80.0000 	 1.53
+85.0000 	 2.46
+90.0000 	 3.46
+95.0000 	 4.38
+96.0000 	 5.07
+97.0000 	 5.87
+98.0000 	 6.45
+99.0000 	 7.08
+99.9000 	 11.20
+99.9900 	 13.21
+99.9990 	 13.21
+99.9999 	 13.21
+100.0000 	 13.21
 ```
 
 ```bash
 $ olly gc-stats 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
 <snip>
 Execution times:
-Wall time (s):  68.51
-GC time (s):    9.15
-GC overhead (% of wall time):   13.35%
+Wall time (s):	60.88
+CPU time (s):	60.88
+GC time (s):	7.30
+GC overhead (% of CPU time):	11.99%
+
+GC time per domain (s):
+Domain0: 	7.30
 
 GC latency profile:
-#[Mean (ms):    0.13,    Stddev (ms):   0.56]
-#[Min (ms):     0.00,    max (ms):      42.89]
+#[Mean (ms):	0.10,	 Stddev (ms):	0.43]
+#[Min (ms):	0.00,	 max (ms):	39.16]
 
-Percentile       Latency (ms)
-25.0000          0.00
-50.0000          0.00
-60.0000          0.00
-70.0000          0.00
-75.0000          0.01
-80.0000          0.01
-85.0000          0.01
-90.0000          0.32
-95.0000          0.87
-96.0000          1.09
-97.0000          1.35
-98.0000          1.74
-99.0000          2.35
-99.9000          5.40
-99.9900          16.34
-99.9990          28.31
-99.9999          42.89
-100.0000         42.89
+Percentile 	 Latency (ms)
+25.0000 	 0.00
+50.0000 	 0.00
+60.0000 	 0.00
+70.0000 	 0.00
+75.0000 	 0.00
+80.0000 	 0.00
+85.0000 	 0.01
+90.0000 	 0.26
+95.0000 	 0.69
+96.0000 	 0.88
+97.0000 	 1.04
+98.0000 	 1.30
+99.0000 	 1.91
+99.9000 	 4.56
+99.9900 	 8.31
+99.9990 	 9.83
+99.9999 	 39.16
+100.0000 	 39.16
 ```
 
 ### trace
