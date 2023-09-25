@@ -6,14 +6,20 @@ open Cmdliner
    .fxt). Fuchsia is a binary format viewable in Perfetto. *)
 type trace_format = Json | Fuchsia
 
+type ts = { mutable start_time : float; mutable end_time : float }
+
 let total_gc_time = ref 0
-let start_time = ref 0.0
-let end_time = ref 0.0
+let wall_time = { start_time = 0.; end_time = 0. }
+let total_cpu_time = ref 0.
+let domain_gc_times = Array.make 128 0
 
 let lifecycle _domain_id _ts lifecycle_event _data =
   match lifecycle_event with
-  | Runtime_events.EV_RING_START -> start_time := Unix.gettimeofday ()
-  | Runtime_events.EV_RING_STOP -> end_time := Unix.gettimeofday ()
+  | Runtime_events.EV_RING_START -> wall_time.start_time <- Unix.gettimeofday ()
+  | Runtime_events.EV_RING_STOP ->
+      wall_time.end_time <- Unix.gettimeofday ();
+      let times = Unix.times () in
+      total_cpu_time := times.tms_utime +. times.tms_cutime
   | _ -> ()
 
 let print_percentiles json output hist =
@@ -43,8 +49,9 @@ let print_percentiles json output hist =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let total_time = !end_time -. !start_time in
-  let gc_time = float_of_int !total_gc_time /. 1000000000. in
+  let to_sec x = float_of_int x /. 1000000000. in
+  let real_time = wall_time.end_time -. wall_time.start_time in
+  let gc_time = to_sec !total_gc_time in
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -62,10 +69,17 @@ let print_percentiles json output hist =
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
-    Printf.fprintf oc "Wall time (s):\t%.2f\n" total_time;
+    Printf.fprintf oc "Wall time (s):\t%.2f\n" real_time;
+    Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
-    Printf.fprintf oc "GC overhead (%% of wall time):\t%.2f%%\n"
-      (gc_time /. total_time *. 100.);
+    Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
+      (gc_time /. !total_cpu_time *. 100.);
+    Printf.fprintf oc "\n";
+    Printf.fprintf oc "GC time per domain (s):\n";
+    Array.iteri
+      (fun i x ->
+        if x > 0 then Printf.fprintf oc "Domain%d: \t%.2f\n" i (to_sec x))
+      domain_gc_times;
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -225,7 +239,8 @@ let gc_stats json output exec_args =
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
         assert (H.record_value hist latency);
-        total_gc_time := !total_gc_time + latency
+        total_gc_time := !total_gc_time + latency;
+        domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
     | _ -> ()
   in
   let init = Fun.id in
@@ -329,7 +344,7 @@ let () =
         `Blocks help_secs;
       ]
     in
-    let doc = "Report the GC latency profile." in
+    let doc = "Report the GC latency profile and stats." in
     let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
     Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
   in
