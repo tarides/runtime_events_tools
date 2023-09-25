@@ -32,18 +32,16 @@ let unit trace_file doms ring_id ts ev () =
 let span_json trace_file ring_id ts ev value =
   let ts_to_us ts = Int64.(div (Ts.to_int64 ts) (of_int 1000)) in
   let name = Runtime_events.User.name ev in
-    if value = Runtime_events.Type.Begin then
-      Printf.fprintf trace_file
+  if value = Runtime_events.Type.Begin then
+    Printf.fprintf trace_file
       "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"B\", \"ts\":%Ld, \
        \"pid\": %d, \"tid\": %d},\n"
-      name
-      (ts_to_us ts) ring_id ring_id
-    else
-      Printf.fprintf trace_file
+      name (ts_to_us ts) ring_id ring_id
+  else
+    Printf.fprintf trace_file
       "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"E\", \"ts\":%Ld, \
-      \"pid\": %d, \"tid\": %d},\n"
-      name
-      (ts_to_us ts) ring_id ring_id
+       \"pid\": %d, \"tid\": %d},\n"
+      name (ts_to_us ts) ring_id ring_id
 
 let v trace_file doms cb =
   let open Runtime_events in
@@ -54,5 +52,4 @@ let v trace_file doms cb =
 
 let v_json trace_file cb =
   let open Runtime_events in
-  cb
-  |> Callbacks.add_user_event Type.span (span_json trace_file)
+  cb |> Callbacks.add_user_event Type.span (span_json trace_file)

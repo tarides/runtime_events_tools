@@ -175,7 +175,8 @@ let trace format trace_filename exec_args =
         Printf.fprintf trace_file "["
       in
       let cleanup () = close_out trace_file in
-      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup
+        exec_args
   | Fuchsia ->
       let open Tracing in
       let trace_file =
