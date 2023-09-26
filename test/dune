@@ -40,6 +40,18 @@
   (progn
    (run olly trace test.trace ./test.exe))))
 
+(rule
+ (alias trace_json)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (target test-json.trace)
+ (deps
+  (alias olly)
+  test.exe)
+ (action
+  (progn
+   (run olly trace --format=json test-json.trace ./test.exe))))
+
 (executable
  (name test)
  (modules test)
