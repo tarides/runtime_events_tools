@@ -1,6 +1,8 @@
-### dev
+### 0.5.0
 
-* olly trace: ingest custom events starting from OCaml 5.1
+* Custom events for json (#24, @Sudha247)
+* Improvements to correct gc-stats (#19, @Sudha247)
+* olly trace: ingest custom events starting from OCaml 5.1 (#17, @TheLortex)
 
 ### 0.4.0
 
