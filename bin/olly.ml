@@ -345,7 +345,7 @@ let () =
         `Blocks help_secs;
       ]
     in
-    let doc = "Report the GC latency profile and stats. Total time spent by the program performing garbage collection (major and minor)" in
+    let doc = "Report the GC latency profile and stats." in
     let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
     Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
   in
