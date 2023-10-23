@@ -11,9 +11,6 @@ jobs:
   windows:
     runs-on: ubuntu-latest
 
-    env:
-      QCHECK_MSG_INTERVAL: '60'
-
     strategy:
       matrix:
         ocaml-compiler:
