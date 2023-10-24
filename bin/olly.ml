@@ -342,6 +342,12 @@ let () =
       [
         `S Manpage.s_description;
         `P "Report the GC latency profile.";
+        `I ("Wall time", "Real execution time of the program");
+        `I ("CPU time", "Total CPU time across all domains");
+        `I ("GC time", "Total time spent by the program performing garbage collection (major and minor)");
+        `I ("GC overhead", "Percentage of time taken up by GC against the total execution time");
+        `I ("GC time per domain", "Time spent by every domain performing garbage collection (major and minor cycles). Domains are reported with their domain ID   (e.g. `Domain0`)");
+        `I ("GC latency profile", "Mean, standard deviation and percentile latency profile of GC events.");
         `Blocks help_secs;
       ]
     in
