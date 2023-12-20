@@ -8,13 +8,13 @@ on:
     - cron: 0 1 * * MON
 
 jobs:
-  windows:
+  build:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         ocaml-compiler:
-          - ocaml-base-compiler.5.1.0~beta1
+          - ocaml-base-compiler.5.1.1
 
     steps:
       - name: Checkout code
