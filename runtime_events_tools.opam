@@ -32,3 +32,9 @@ build: [
   ]
 ]
 dev-repo: "git+https://github.com/tarides/runtime_events_tools.git"
+pin-depends: [
+  # OCaml Intrinsics v0.16.0 plus ARM64 support see
+  # https://github.com/janestreet/ocaml_intrinsics/pull/6 and
+  # https://github.com/janestreet/ocaml_intrinsics/pull/7
+  "ocaml_intrinsics.v0.16.0" "git+https://github.com/tmcgilchrist/ocaml_intrinsics#fc6037516350f90e8d003c170263eaa734fc5e76"
+]
