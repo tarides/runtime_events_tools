@@ -18,7 +18,6 @@
  (description "Various tools for the runtime events tracing system in OCaml")
  (depends
   (ocaml (>= "5.0.0~"))
-  ocamlfind
   hdr_histogram
   cmdliner
   tracing
