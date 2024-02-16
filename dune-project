@@ -19,6 +19,6 @@
  (depends
   (ocaml (>= "5.0.0~"))
   hdr_histogram
-  cmdliner
+  (cmdliner (>= 1.1.0))
   tracing
   (menhir :with-test)))
