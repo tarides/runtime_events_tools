@@ -11,9 +11,8 @@ bug-reports: "https://github.com/tarides/runtime_events_tools/issues"
 depends: [
   "dune" {>= "3.2"}
   "ocaml" {>= "5.0.0~"}
-  "ocamlfind"
   "hdr_histogram"
-  "cmdliner"
+  "cmdliner" {>= "1.1.0"}
   "tracing"
   "menhir" {with-test}
   "odoc" {with-doc}
