@@ -96,8 +96,8 @@ let print_percentiles json output hist =
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
-    =
+let olly ?extra ?runtime_counter ~runtime_begin ~runtime_end ~cleanup ~lifecycle
+    ~init exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -123,7 +123,7 @@ let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
   let callbacks =
     Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle
-      ~lost_events ()
+      ?runtime_counter ~lost_events ()
     |> Option.value extra ~default:Fun.id
   in
   let child_alive () =
@@ -169,6 +169,14 @@ let trace format trace_filename exec_args =
           (ts_to_us ts) ring_id ring_id;
         flush trace_file
       in
+      let runtime_counter ring_id ts counter_event i =
+        Printf.fprintf trace_file
+          "{\"name\" : \"%s\", \"ph\" : \"C\", \"ts\":%Ld,\"args\" : \
+           {\"value\" : \"%d\", \"pid\": %d, \"tid\": %d}}"
+          (Runtime_events.runtime_counter_name counter_event)
+          (ts_to_us ts) i ring_id ring_id;
+        flush trace_file
+      in
       let extra = Olly_custom_events.v_json trace_file in
       let init () =
         (* emit prefix in the tracefile *)
@@ -176,7 +184,7 @@ let trace format trace_filename exec_args =
       in
       let cleanup () = close_out trace_file in
       olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup
-        exec_args
+        ~runtime_counter exec_args
   | Fuchsia ->
       let open Tracing in
       let trace_file =
@@ -209,11 +217,24 @@ let trace format trace_filename exec_args =
           ~name:(Runtime_events.runtime_phase_name phase)
           ~time:(ts |> ts_to_int |> int_to_span)
       in
+      let runtime_counter ring_id ts counter_event i =
+        let thread = doms.(ring_id) in
+        let args =
+          [
+            ("value", Trace.Arg.Int i);
+            ("pid", Trace.Arg.Int ring_id);
+            ("tid", Trace.Arg.Int ring_id);
+          ]
+        in
+        Trace.write_counter trace_file ~thread ~args ~category:"C"
+          ~name:(Runtime_events.runtime_counter_name counter_event)
+          ~time:(ts |> ts_to_int |> int_to_span)
+      in
       let extra = Olly_custom_events.v trace_file doms in
       let init () = () in
       let cleanup () = Trace.close trace_file in
-      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup
-        exec_args
+      olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~runtime_counter
+        ~cleanup exec_args
 
 let gc_stats json output exec_args =
   let current_event = Hashtbl.create 13 in
