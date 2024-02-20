@@ -1,60 +1,42 @@
 ; run menhir test
 
-(alias
- (name olly)
- (deps ../bin/olly.exe))
-
 (executable
  (name test_gc_stats)
  (modules test_gc_stats))
 
-; (alias
-;  (name test-gc)
-;  (deps ../_build/default/test/test_gc_stats.exe))
-
-; (rule
-;  (alias runtest)
-;  (deps
-;   (alias olly)
-;   (alias test-gc))
-;  (action
-;   (run olly gc-stats "_build/default/test/test_gc_stats.exe")))
+(executable
+ (name test_fib)
+ (modules test_fib)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (libraries runtime_events unix))
 
 (rule
  (alias runtest)
- (deps
-  (alias olly)
-  test_gc_stats.exe)
+ (deps %{bin:olly} test_gc_stats.exe)
+ (action
+  (run olly gc-stats "./test_gc_stats.exe")))
+
+(rule
+ (alias runtest)
+ (deps %{bin:olly} test_gc_stats.exe)
  (action
   (run olly gc-stats "./test_gc_stats.exe 19")))
 
 (rule
- (alias trace)
+ (alias runtest)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
- (target test.trace)
- (deps
-  (alias olly)
-  test.exe)
+ (deps %{bin:olly} test_fib.exe)
  (action
   (progn
-   (run olly trace test.trace ./test.exe))))
+   (run olly trace test.trace ./test_fib.exe))))
 
 (rule
- (alias trace_json)
+ (alias runtest)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
- (target test-json.trace)
- (deps
-  (alias olly)
-  test.exe)
+ (deps %{bin:olly} test_fib.exe)
  (action
   (progn
-   (run olly trace --format=json test-json.trace ./test.exe))))
-
-(executable
- (name test)
- (modules test)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (libraries runtime_events unix))
+   (run olly trace --format=json test-json.trace ./test_fib.exe))))

@@ -101,8 +101,8 @@ let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
-  (* Set the temp directory. We should make this configurable. *)
-  let tmp_dir = Filename.get_temp_dir_name () ^ "/" in
+  (* TODO Set the temp directory. We should make this configurable. *)
+  let tmp_dir = Filename.get_temp_dir_name () |> Unix.realpath in
   let env =
     Array.append
       [|

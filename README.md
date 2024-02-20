@@ -125,4 +125,4 @@ Traces in either formats can be viewed in [perfetto trace viewer](https://ui.per
 ## Dependencies
 
 The library depends on
-[`hdr_histogram_ocaml`](https://github.com/kayceesrk/hdr_histogram_ocaml).
+[`hdr_histogram_ocaml`](https://github.com/ocaml-multicore/hdr_histogram_ocaml).
