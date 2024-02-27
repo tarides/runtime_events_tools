@@ -21,4 +21,5 @@
   hdr_histogram
   (cmdliner (>= 1.1.0))
   tracing
+  (ocaml_intrinsics (>= v0.16.1))
   (menhir :with-test)))

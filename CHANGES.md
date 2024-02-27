@@ -1,3 +1,10 @@
+
+### 0.5.1
+
+* Fix support on ARM64 platforms (Linux and MacOS) (#34, @tmcgilchrist)
+* Remove ocamlfind dependency. (#36, @tmcgilchrist)
+* Expand gc-stats help (#28, @ju-sh)
+
 ### 0.5.0
 
 * Custom events for json (#24, @Sudha247)
