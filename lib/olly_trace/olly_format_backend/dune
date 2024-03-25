@@ -1,0 +1,13 @@
+(library
+ (name olly_format_backend)
+ (modules olly_format_backend event))
+
+(library
+ (name olly_format_json)
+ (modules olly_format_json)
+ (libraries olly_format_backend))
+
+(library
+ (name olly_format_fuchsia)
+ (modules olly_format_fuchsia)
+ (libraries olly_format_backend tracing))

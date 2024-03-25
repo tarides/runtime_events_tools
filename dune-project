@@ -16,10 +16,21 @@
  (sites (lib plugins))
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml")
+ (allow_empty)
  (depends
   (ocaml (>= "5.0.0~"))
-  hdr_histogram
+   hdr_histogram
   (cmdliner (>= 1.1.0))
-  tracing
+   tracing
   (ocaml_intrinsics (>= v0.16.1))
   (menhir :with-test)))
+
+(package
+ (name runtime_events_tools_bare)
+ (synopsis "Tools for the runtime events tracing system in OCaml")
+ (description "Various tools for the runtime events tracing system in OCaml: minimal dependencies")
+ (allow_empty)
+ (sites (lib plugins))
+ (depends
+  (ocaml (>= "5.0.0~"))
+  (cmdliner (>= 1.1.0))))
