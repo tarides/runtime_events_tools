@@ -1,6 +1,5 @@
 module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
-open Olly_common
 
 type ts = { mutable start_time : float; mutable end_time : float }
 
@@ -120,10 +119,12 @@ let gc_stats json output exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  Olly_common.olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+  Olly_common.Launch.olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
 
 let gc_stats_cmd =
   let open Cmdliner in
+  let open Olly_common.Cli in
+
   let json_option =
     let doc = "Print the output in json instead of human-readable format." in
     Arg.(value & flag & info [ "json" ] ~docv:"json" ~doc)
