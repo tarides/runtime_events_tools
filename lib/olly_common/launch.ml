@@ -1,8 +1,12 @@
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
-    =
+type subprocess =
+  { alive : unit -> bool
+  ; cursor : Runtime_events.cursor
+  ; close : unit -> unit }
+
+let exec_process exec_args =
   let argsl = String.split_on_char ' ' exec_args in
   let executable_filename = List.hd argsl in
 
@@ -21,34 +25,58 @@ let olly ?extra ~runtime_begin ~runtime_end ~cleanup ~lifecycle ~init exec_args
     Unix.create_process_env executable_filename (Array.of_list argsl) env
       Unix.stdin Unix.stdout Unix.stderr
   in
-
-  init ();
-  (* Read from the child process *)
   Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (tmp_dir, child_pid)) in
-  let callbacks =
-    Runtime_events.Callbacks.create ~runtime_begin ~runtime_end ~lifecycle
-      ~lost_events ()
-    |> Option.value extra ~default:Fun.id
-  in
-  let child_alive () =
-    match Unix.waitpid [ Unix.WNOHANG ] child_pid with
+  let alive () = match Unix.waitpid [ Unix.WNOHANG ] child_pid with
     | 0, _ -> true
     | p, _ when p = child_pid -> false
     | _, _ -> assert false
-  in
-  while child_alive () do
-    Runtime_events.read_poll cursor callbacks None |> ignore;
+  and close () =
+    Runtime_events.free_cursor cursor;
+    (* We need to remove the ring buffers ourselves because we told
+       the child process not to remove them *)
+    let ring_file =
+      Filename.concat tmp_dir (string_of_int child_pid ^ ".events")
+    in Unix.unlink ring_file
+  in { alive ; cursor ; close }
+
+let collect_events child callbacks =
+  (* Read from the child process *)
+  while child.alive () do
+    Runtime_events.read_poll child.cursor callbacks None |> ignore;
     Unix.sleepf 0.1 (* Poll at 10Hz *)
   done;
-
   (* Do one more poll in case there are any remaining events we've missed *)
-  Runtime_events.read_poll cursor callbacks None |> ignore;
+  Runtime_events.read_poll child.cursor callbacks None |> ignore
 
-  (* Now we're done, we need to remove the ring buffers ourselves because we
-      told the child process not to remove them *)
-  let ring_file =
-    Filename.concat tmp_dir (string_of_int child_pid ^ ".events")
-  in
-  Unix.unlink ring_file;
-  cleanup ()
+type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
+type consumer_config =
+  { runtime_begin : (Runtime_events.runtime_phase -> unit) acceptor_fn
+  ; runtime_end : (Runtime_events.runtime_phase -> unit) acceptor_fn
+  ; runtime_counter : (Runtime_events.runtime_counter -> int -> unit) acceptor_fn
+  ; lifecycle : (Runtime_events.lifecycle -> int option -> unit) acceptor_fn
+  ; extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t
+  ; init : unit -> unit
+  ; cleanup : unit -> unit }
+let empty_config =
+  { runtime_begin = (fun _ _ _ -> ())
+  ; runtime_end = (fun _ _ _ -> ())
+  ; runtime_counter = (fun _ _ _ _ -> ())
+  ; lifecycle = (fun _ _ _ _ -> ())
+  ; extra = Fun.id
+  ; init = (fun () -> ())
+  ; cleanup = (fun () -> ()) }
+
+let olly config exec_args =
+  config.init ();
+  Fun.protect ~finally:config.cleanup begin fun () ->
+    let child = exec_process exec_args in
+    Fun.protect ~finally:child.close begin fun () ->
+      let callbacks =
+        let { runtime_begin ; runtime_end ; runtime_counter ; lifecycle ; extra ; _ } = config in
+        Runtime_events.Callbacks.create
+          ~runtime_begin ~runtime_end ~runtime_counter ~lifecycle ~lost_events ()
+        |> extra
+      in collect_events child callbacks
+      end
+    end

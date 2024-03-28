@@ -15,7 +15,12 @@ let trace fmt trace_filename exec_args =
   and cleanup () = Format.close tracer
   and extra = Olly_custom_events.v tracer
   and lifecycle _ _ _ _ = () in
-  Olly_common.Launch.olly ~extra ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+  let open Olly_common.Launch in
+  olly
+    { empty_config with
+      extra; runtime_begin; runtime_end;
+      lifecycle; init; cleanup }
+    exec_args
 
 let trace_cmd format_list =
   let open Cmdliner in

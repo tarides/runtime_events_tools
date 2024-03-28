@@ -119,7 +119,12 @@ let gc_stats json output exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
-  Olly_common.Launch.olly ~runtime_begin ~runtime_end ~init ~lifecycle ~cleanup exec_args
+  let open Olly_common.Launch in
+  olly
+    { empty_config with
+      runtime_begin; runtime_end;
+      lifecycle; init; cleanup }
+    exec_args
 
 let gc_stats_cmd =
   let open Cmdliner in
