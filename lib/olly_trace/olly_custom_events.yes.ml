@@ -4,17 +4,18 @@ open Runtime_events
 
 let emit tracer get_kind ring_id ts ev value =
   Trace.emit tracer
-    { name = User.name ev
-    ; ts = Timestamp.to_int64 ts
-    ; ring_id
-    ; kind = get_kind value }
+    {
+      name = User.name ev;
+      ts = Timestamp.to_int64 ts;
+      ring_id;
+      kind = get_kind value;
+    }
 
 let from_int x = Counter x
 let from_unit () = Instant
+
 let from_span (s : Type.span) =
-  match s with
-  | Begin -> SpanBegin
-  | End -> SpanEnd
+  match s with Begin -> SpanBegin | End -> SpanEnd
 
 let v tracer cb =
   let open Runtime_events in

@@ -8,7 +8,9 @@ let help_secs =
     `P "Use $(mname) $(i,COMMAND) --help for help on a single command.";
     `Noblank;
     `S Manpage.s_bugs;
-    `P "Check bug reports at http://github.com/tarides/runtime_events_tools/issues.";
+    `P
+      "Check bug reports at \
+       http://github.com/tarides/runtime_events_tools/issues.";
   ]
 
 let sdocs = Manpage.s_common_options
@@ -34,9 +36,9 @@ let help man_format cmds topic =
 let exec_args p =
   let doc =
     "Executable (and its arguments) to trace. If the executable takes\n\
-     \              arguments, wrap quotes around the executable and its \
+    \              arguments, wrap quotes around the executable and its \
      arguments.\n\
-     \              For example, olly '<exec> <arg_1> <arg_2> ... <arg_n>'."
+    \              For example, olly '<exec> <arg_1> <arg_2> ... <arg_n>'."
   in
   Arg.(required & pos p (some string) None & info [] ~docv:"EXECUTABLE" ~doc)
 
@@ -62,7 +64,7 @@ let main name commands =
   let main_cmd =
     let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info name ~doc ~sdocs in
-    Cmd.group info (commands @ [help_cmd])
+    Cmd.group info (commands @ [ help_cmd ])
   in
 
   exit (Cmd.eval main_cmd)

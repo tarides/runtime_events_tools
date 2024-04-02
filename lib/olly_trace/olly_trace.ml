@@ -5,10 +5,13 @@ let trace fmt trace_filename exec_args =
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
     Format.emit tracer
-      { name = Runtime_events.runtime_phase_name phase
-      ; ts = Runtime_events.Timestamp.to_int64 ts
-      ; ring_id
-      ; kind } in
+      {
+        name = Runtime_events.runtime_phase_name phase;
+        ts = Runtime_events.Timestamp.to_int64 ts;
+        ring_id;
+        kind;
+      }
+  in
   let runtime_begin = runtime_phase SpanBegin
   and runtime_end = runtime_phase SpanEnd
   and init () = ()
@@ -17,15 +20,20 @@ let trace fmt trace_filename exec_args =
   and lifecycle _ _ _ _ = () in
   let open Olly_common.Launch in
   olly
-    { empty_config with
-      extra; runtime_begin; runtime_end;
-      lifecycle; init; cleanup }
+    {
+      empty_config with
+      extra;
+      runtime_begin;
+      runtime_end;
+      lifecycle;
+      init;
+      cleanup;
+    }
     exec_args
 
 let trace_cmd format_list =
   let open Cmdliner in
   let open Olly_common.Cli in
-
   let trace_filename =
     let doc = "Target trace file name." in
     Arg.(required & pos 0 (some string) None & info [] ~docv:"TRACEFILE" ~doc)
@@ -33,17 +41,18 @@ let trace_cmd format_list =
   let format_option =
     let doc =
       "Format of the target trace, options are: "
-      ^ (List.map begin fun fmt ->
-           Printf.sprintf
-             "\"%s\" (%s)"
-             (Format.name fmt)
-             (Format.description fmt)
-         end format_list |> String.concat ", ")
+      ^ (List.map
+           (fun fmt ->
+             Printf.sprintf "\"%s\" (%s)" (Format.name fmt)
+               (Format.description fmt))
+           format_list
+        |> String.concat ", ")
       ^ "."
     in
     Arg.(
       value
-      & opt (enum (List.map (fun fmt -> (Format.name fmt, fmt)) format_list))
+      & opt
+          (enum (List.map (fun fmt -> (Format.name fmt, fmt)) format_list))
           (List.hd format_list)
       & info [ "f"; "format" ] ~docv:"format" ~doc)
   in

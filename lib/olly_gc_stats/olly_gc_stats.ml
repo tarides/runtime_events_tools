@@ -121,15 +121,12 @@ let gc_stats json output exec_args =
   let cleanup () = print_percentiles json output hist in
   let open Olly_common.Launch in
   olly
-    { empty_config with
-      runtime_begin; runtime_end;
-      lifecycle; init; cleanup }
+    { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
     exec_args
 
 let gc_stats_cmd =
   let open Cmdliner in
   let open Olly_common.Cli in
-
   let json_option =
     let doc = "Print the output in json instead of human-readable format." in
     Arg.(value & flag & info [ "json" ] ~docv:"json" ~doc)
@@ -143,7 +140,8 @@ let gc_stats_cmd =
     Arg.(
       value
       & opt (some string) None
-      & info [ "o"; "output" ] ~docv:"output" ~doc) in
+      & info [ "o"; "output" ] ~docv:"output" ~doc)
+  in
 
   let man =
     [
@@ -161,9 +159,9 @@ let gc_stats_cmd =
         );
       `I
         ( "GC time per domain",
-          "Time spent by every domain performing garbage collection (major \
-           and minor cycles). Domains are reported with their domain ID   \
-           (e.g. `Domain0`)" );
+          "Time spent by every domain performing garbage collection (major and \
+           minor cycles). Domains are reported with their domain ID   (e.g. \
+           `Domain0`)" );
       `I
         ( "GC latency profile",
           "Mean, standard deviation and percentile latency profile of GC \
