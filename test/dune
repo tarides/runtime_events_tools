@@ -13,18 +13,21 @@
 
 (rule
  (alias runtest)
+ (package runtime_events_tools)
  (deps %{bin:olly} test_gc_stats.exe)
  (action
   (run olly gc-stats "./test_gc_stats.exe")))
 
 (rule
  (alias runtest)
+ (package runtime_events_tools)
  (deps %{bin:olly} test_gc_stats.exe)
  (action
   (run olly gc-stats "./test_gc_stats.exe 19")))
 
 (rule
  (alias runtest)
+ (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (deps %{bin:olly} test_fib.exe)
@@ -34,9 +37,20 @@
 
 (rule
  (alias runtest)
+ (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (deps %{bin:olly} test_fib.exe)
  (action
   (progn
    (run olly trace --format=json test-json.trace ./test_fib.exe))))
+
+(rule
+ (alias runtest)
+ (package runtime_events_tools_bare)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (deps %{bin:olly_bare} test_fib.exe)
+ (action
+  (progn
+   (run olly_bare trace --format=json test-bare-json.trace ./test_fib.exe))))
