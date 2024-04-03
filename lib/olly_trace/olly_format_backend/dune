@@ -10,4 +10,5 @@
 (library
  (name olly_format_fuchsia)
  (modules olly_format_fuchsia)
+ (optional)
  (libraries olly_format_backend tracing))
