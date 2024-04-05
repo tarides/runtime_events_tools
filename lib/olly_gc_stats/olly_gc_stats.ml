@@ -8,14 +8,47 @@ let wall_time = { start_time = 0.; end_time = 0. }
 let total_cpu_time = ref 0.
 let domain_gc_times = Array.make 128 0
 
-let lifecycle _domain_id _ts lifecycle_event _data =
-  match lifecycle_event with
-  | Runtime_events.EV_RING_START -> wall_time.start_time <- Unix.gettimeofday ()
-  | Runtime_events.EV_RING_STOP ->
-      wall_time.end_time <- Unix.gettimeofday ();
-      let times = Unix.times () in
-      total_cpu_time := times.tms_utime +. times.tms_cutime
-  | _ -> ()
+let make_callbacks hist =
+  let open Olly_rte_shim in
+  let open Event in
+  let current_event = Hashtbl.create 13 in
+  let is_gc_phase phase =
+    match phase with
+    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
+    | Runtime_events.EV_INTERRUPT_REMOTE ->
+        true
+    | _ -> false
+  in
+  let handle evt =
+    let { ring_id; ts; _ } = evt in
+    match evt.tag with
+    | Runtime_phase phase -> (
+        if evt.kind = SpanBegin then (
+          if is_gc_phase phase then
+            match Hashtbl.find_opt current_event ring_id with
+            | None -> Hashtbl.add current_event ring_id (phase, ts)
+            | _ -> ())
+        else
+          match Hashtbl.find_opt current_event ring_id with
+          | Some (saved_phase, saved_ts) when saved_phase = phase ->
+              Hashtbl.remove current_event ring_id;
+              let latency = Int64.to_int (Int64.sub ts saved_ts) in
+              assert (H.record_value hist latency);
+              total_gc_time := !total_gc_time + latency;
+              domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
+          | _ -> ())
+    | Lifecycle lifecycle_event -> (
+        match lifecycle_event with
+        | Runtime_events.EV_RING_START ->
+            wall_time.start_time <- Unix.gettimeofday ()
+        | Runtime_events.EV_RING_STOP ->
+            wall_time.end_time <- Unix.gettimeofday ();
+            let times = Unix.times () in
+            total_cpu_time := times.tms_utime +. times.tms_cutime
+        | _ -> ())
+    | _ -> ()
+  in
+  handle
 
 let print_percentiles json output hist =
   let ms ns = ns /. 1000000. in
@@ -89,40 +122,14 @@ let print_percentiles json output hist =
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
 let gc_stats json output exec_args =
-  let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
       ~significant_figures:3
   in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
-  let runtime_begin ring_id ts phase =
-    if is_gc_phase phase then
-      match Hashtbl.find_opt current_event ring_id with
-      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-      | _ -> ()
-  in
-  let runtime_end ring_id ts phase =
-    match Hashtbl.find_opt current_event ring_id with
-    | Some (saved_phase, saved_ts) when saved_phase = phase ->
-        Hashtbl.remove current_event ring_id;
-        let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        assert (H.record_value hist latency);
-        total_gc_time := !total_gc_time + latency;
-        domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
-    | _ -> ()
-  in
-  let init = Fun.id in
-  let cleanup () = print_percentiles json output hist in
-  let open Olly_common.Launch in
-  olly
-    { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
-    exec_args
+  let handler = make_callbacks hist
+  and init () = ()
+  and cleanup () = print_percentiles json output hist in
+  Olly_common.Launch.olly { handler; init; cleanup } exec_args
 
 let gc_stats_cmd =
   let open Cmdliner in
@@ -171,4 +178,4 @@ let gc_stats_cmd =
   in
   let doc = "Report the GC latency profile and stats." in
   let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
-  Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
+  Cmd.v info Term.(const gc_stats $ json_option $ output_option $ common_args 0)

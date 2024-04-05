@@ -1,3 +1,3 @@
 (library
  (name olly_common)
- (libraries runtime_events unix cmdliner))
+ (libraries olly_rte_shim unix cmdliner))

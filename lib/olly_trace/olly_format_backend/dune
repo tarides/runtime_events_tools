@@ -1,6 +1,7 @@
 (library
  (name olly_format_backend)
- (modules olly_format_backend event))
+ (modules olly_format_backend)
+ (libraries olly_rte_shim))
 
 (library
  (name olly_format_json)

@@ -1,3 +1,6 @@
+open Olly_rte_shim
+open Event
+
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
@@ -53,47 +56,36 @@ let collect_events child callbacks =
   (* Do one more poll in case there are any remaining events we've missed *)
   Runtime_events.read_poll child.cursor callbacks None |> ignore
 
-type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
-
 type consumer_config = {
-  runtime_begin : (Runtime_events.runtime_phase -> unit) acceptor_fn;
-  runtime_end : (Runtime_events.runtime_phase -> unit) acceptor_fn;
-  runtime_counter : (Runtime_events.runtime_counter -> int -> unit) acceptor_fn;
-  lifecycle : (Runtime_events.lifecycle -> int option -> unit) acceptor_fn;
-  extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
+  handler : shim_callback;
   init : unit -> unit;
   cleanup : unit -> unit;
 }
 
 let empty_config =
-  {
-    runtime_begin = (fun _ _ _ -> ());
-    runtime_end = (fun _ _ _ -> ());
-    runtime_counter = (fun _ _ _ _ -> ());
-    lifecycle = (fun _ _ _ _ -> ());
-    extra = Fun.id;
-    init = (fun () -> ());
-    cleanup = (fun () -> ());
-  }
+  { handler = (fun _ -> ()); init = (fun () -> ()); cleanup = (fun () -> ()) }
 
-let olly config exec_args =
+type common_args = { exec_args : string; src_table_path : string option }
+
+let our_handler (k : shim_callback) (evt : event) =
+  match evt.tag with
+  | Lost_events -> (
+      match evt.kind with Counter num -> lost_events evt.ring_id num | _ -> ())
+  | _ -> k evt
+
+let make_shim_callback src_table_path handler =
+  let map_names =
+    match src_table_path with
+    | None -> Construct.builtin_names
+    | Some path -> Construct.tabled_names (Tabling.parse_from_yaml_file path)
+  in
+  our_handler (map_names handler)
+
+let olly config { exec_args; src_table_path } =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
       let child = exec_process exec_args in
       Fun.protect ~finally:child.close (fun () ->
-          let callbacks =
-            let {
-              runtime_begin;
-              runtime_end;
-              runtime_counter;
-              lifecycle;
-              extra;
-              _;
-            } =
-              config
-            in
-            Runtime_events.Callbacks.create ~runtime_begin ~runtime_end
-              ~runtime_counter ~lifecycle ~lost_events ()
-            |> extra
-          in
+          let cb = make_shim_callback src_table_path config.handler in
+          let callbacks = Construct.make_callbacks cb in
           collect_events child callbacks))
