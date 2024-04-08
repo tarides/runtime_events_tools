@@ -11,6 +11,7 @@ type kind +=
 type tag = ..
 
 type tag +=
+  | Unrecognised
   | Lifecycle of Runtime_events.lifecycle
   | Runtime_phase of Runtime_events.runtime_phase
   | Runtime_counter of Runtime_events.runtime_counter

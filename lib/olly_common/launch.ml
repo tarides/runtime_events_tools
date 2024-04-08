@@ -77,7 +77,10 @@ let make_shim_callback src_table_path handler =
   let map_names =
     match src_table_path with
     | None -> Construct.builtin_names
-    | Some path -> Construct.tabled_names (Tabling.parse_from_yaml_file path)
+    | Some path ->
+        Tabling.tabled_names_and_tags
+          ~actual:(Tabling.parse_from_yaml_file path)
+          ~builtin:Construct.builtin_name_table
   in
   our_handler (map_names handler)
 

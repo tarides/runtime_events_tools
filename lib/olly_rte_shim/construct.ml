@@ -11,7 +11,6 @@ let builtin_names (k : shim_callback) (evt : event) : unit =
   | _ -> evt
 
 let builtin_name_table = Builtin_name_table.name_table
-let tabled_names = Tabling.tabled_names
 
 let make_callbacks (sc : shim_callback) : Callbacks.t =
   let runtime_begin ring_id ts ph =
