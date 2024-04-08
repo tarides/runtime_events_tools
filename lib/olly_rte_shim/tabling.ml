@@ -79,17 +79,14 @@ let build_int_map (input : string array) (output : string array) : int array =
 exception Not_mapped
 
 let translate_table (src_tag : 'a) (mapping : int array) (k : 'a -> 'b) : 'b =
-  match
-    try
-      let new_idx = mapping.(enum_to_int src_tag) in
-      Some new_idx
-    with Invalid_argument _ -> None
-  with
-  | None -> raise Not_mapped
-  | Some new_idx ->
-      (* safety: input was an int (and possibly an invalid value), output is too *)
-      let new_tag : 'a = Obj.magic new_idx in
-      k new_tag
+  let new_idx =
+    try mapping.(enum_to_int src_tag)
+    with Invalid_argument _ -> raise Not_mapped
+  in
+  if new_idx = -1 then raise Not_mapped;
+  (* safety: input was an int (and possibly an invalid value), output is too *)
+  let new_tag : 'a = Obj.magic new_idx in
+  k new_tag
 
 (** Translate the tags of [runtime_phase], [runtime_counter] and [lifecycle]
     events by name using two tables, which allows us to [match] on them using
