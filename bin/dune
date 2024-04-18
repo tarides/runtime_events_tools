@@ -1,19 +1,13 @@
 (executable
+ (package runtime_events_tools)
  (public_name olly)
  (name olly)
- (modules olly olly_custom_events)
- (libraries runtime_events unix hdr_histogram cmdliner tracing))
+ (modules olly)
+ (libraries olly_trace olly_gc_stats olly_format_json olly_format_fuchsia))
 
-(rule
- (target olly_custom_events.ml)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (action
-  (copy olly_custom_events.yes.ml %{target})))
-
-(rule
- (target olly_custom_events.ml)
- (enabled_if
-  (< %{ocaml_version} 5.1.0))
- (action
-  (copy olly_custom_events.no.ml %{target})))
+(executable
+ (package runtime_events_tools_bare)
+ (public_name olly_bare)
+ (name olly_bare)
+ (modules olly_bare)
+ (libraries olly_trace olly_format_json))

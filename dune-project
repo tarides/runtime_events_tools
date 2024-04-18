@@ -13,7 +13,6 @@
 
 (package
  (name runtime_events_tools)
- (sites (lib plugins))
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml")
  (depends
@@ -23,3 +22,11 @@
   tracing
   (ocaml_intrinsics (>= v0.16.1))
   (menhir :with-test)))
+
+(package
+ (name runtime_events_tools_bare)
+ (synopsis "Tools for the runtime events tracing system in OCaml")
+ (description "Various tools for the runtime events tracing system in OCaml: minimal dependencies")
+ (depends
+  (ocaml (>= "5.0.0~"))
+  (cmdliner (>= 1.1.0))))

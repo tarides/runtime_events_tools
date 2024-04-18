@@ -1,0 +1,4 @@
+(library
+ (name olly_gc_stats)
+ (optional)
+ (libraries olly_common hdr_histogram))
