@@ -3,11 +3,16 @@
  (public_name olly)
  (name olly)
  (modules olly)
- (libraries olly_trace olly_gc_stats olly_format_json olly_format_fuchsia))
+ (libraries
+  olly_trace
+  olly_gc_stats
+  olly_gen_tables
+  olly_format_json
+  olly_format_fuchsia))
 
 (executable
  (package runtime_events_tools_bare)
  (public_name olly_bare)
  (name olly_bare)
  (modules olly_bare)
- (libraries olly_trace olly_format_json))
+ (libraries olly_trace olly_gen_tables olly_format_json))

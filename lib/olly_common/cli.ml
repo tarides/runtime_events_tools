@@ -42,6 +42,21 @@ let exec_args p =
   in
   Arg.(required & pos p (some string) None & info [] ~docv:"EXECUTABLE" ~doc)
 
+let src_table_args =
+  let doc =
+    "Load a runtime events name table for event translation, for forwards \
+     compatibility with newer OCaml versions.\n\
+     See `olly-gen-tables`."
+  in
+  Arg.(
+    value & opt (some non_dir_file) None & info [ "table" ] ~docv:"PATH" ~doc)
+
+let common_args p =
+  let combine src_table_path exec_args : Launch.common_args =
+    { src_table_path; exec_args }
+  in
+  Term.(const combine $ src_table_args $ exec_args p)
+
 let main name commands =
   let help_cmd =
     let topic =

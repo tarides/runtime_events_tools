@@ -1,0 +1,37 @@
+(library
+ (name olly_rte_shim)
+ (modules construct custom_events event tabling builtin_name_table)
+ (libraries runtime_events))
+
+(library
+ (name olly_gen_tables)
+ (modules olly_gen_tables)
+ (libraries str cmdliner))
+
+(executable
+ (name gen_tables)
+ (libraries olly_gen_tables)
+ (modules gen_tables))
+
+(rule
+ (target custom_events.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (action
+  (copy# custom_events.yes.ml %{target})))
+
+(rule
+ (target custom_events.ml)
+ (enabled_if
+  (< %{ocaml_version} 5.1.0))
+ (action
+  (copy# custom_events.no.ml %{target})))
+
+(rule
+ (target builtin_name_table.ml)
+ (action
+  (run
+   ./gen_tables.exe
+   --output=%{target}
+   --format=ml
+   %{ocaml_where}/caml/runtime_events.h)))
