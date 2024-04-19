@@ -7,8 +7,9 @@ type subprocess = {
   close : unit -> unit;
 }
 
-let exec_process exec_args =
-  let argsl = String.split_on_char ' ' exec_args in
+type exec_config = Attach of string * int | Execute of string list
+
+let exec_process argsl =
   let executable_filename = List.hd argsl in
 
   (* TODO Set the temp directory. We should make this configurable. *)
@@ -44,6 +45,21 @@ let exec_process exec_args =
   in
   { alive; cursor; close }
 
+let attach_process dir pid =
+  let cursor = Runtime_events.create_cursor (Some (dir, pid)) in
+  let alive () =
+    try
+      Unix.kill pid 0;
+      true
+    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+  and close () = Runtime_events.free_cursor cursor in
+  { alive; cursor; close }
+
+let launch_process exec_args =
+  match exec_args with
+  | Execute argsl -> exec_process argsl
+  | Attach (dir, pid) -> attach_process dir pid
+
 let collect_events child callbacks =
   (* Read from the child process *)
   while child.alive () do
@@ -76,10 +92,10 @@ let empty_config =
     cleanup = (fun () -> ());
   }
 
-let olly config exec_args =
+let olly config (exec_args : exec_config) =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
-      let child = exec_process exec_args in
+      let child = launch_process exec_args in
       Fun.protect ~finally:child.close (fun () ->
           let callbacks =
             let {

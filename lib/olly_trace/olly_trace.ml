@@ -80,4 +80,6 @@ let trace_cmd format_list =
   in
   let doc = "Save the runtime trace to file." in
   let info = Cmd.info "trace" ~doc ~sdocs ~man in
-  Cmd.v info Term.(const trace $ format_option $ trace_filename $ emit_counter $ exec_args 1)
+  Cmd.v info
+    Term.(
+      const trace $ format_option $ trace_filename $ emit_counter $ exec_args 1)
