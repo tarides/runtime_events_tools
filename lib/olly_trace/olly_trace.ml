@@ -12,6 +12,15 @@ let trace fmt trace_filename exec_args =
         kind;
       }
   in
+  let runtime_counter ring_id ts counter value =
+    Format.emit tracer
+      {
+        name = Runtime_events.runtime_counter_name counter;
+        ts = Runtime_events.Timestamp.to_int64 ts;
+        ring_id;
+        kind = Counter value;
+      }
+  in
   let runtime_begin = runtime_phase SpanBegin
   and runtime_end = runtime_phase SpanEnd
   and init () = ()
@@ -21,9 +30,9 @@ let trace fmt trace_filename exec_args =
   let open Olly_common.Launch in
   olly
     {
-      empty_config with
       extra;
       runtime_begin;
+      runtime_counter;
       runtime_end;
       lifecycle;
       init;
