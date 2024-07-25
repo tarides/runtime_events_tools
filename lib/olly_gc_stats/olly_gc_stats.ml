@@ -2,51 +2,50 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 
 type ts = { mutable start_time : float; mutable end_time : float }
-
-let total_gc_time = ref 0
 let wall_time = { start_time = 0.; end_time = 0. }
-let total_cpu_time = ref 0.
+
+let domain_elapsed_times = Array.make 128 (0.)
 let domain_gc_times = Array.make 128 0
 
-let lifecycle _domain_id _ts lifecycle_event _data =
+let lifecycle domain_id _ts lifecycle_event _data =
   match lifecycle_event with
-  | Runtime_events.EV_RING_START -> wall_time.start_time <- Unix.gettimeofday ()
+  | Runtime_events.EV_RING_START ->
+      let ts = Unix.gettimeofday () in
+      wall_time.start_time <- ts;
+      domain_elapsed_times.(domain_id) <- ts
   | Runtime_events.EV_RING_STOP ->
-      wall_time.end_time <- Unix.gettimeofday ();
-      let times = Unix.times () in
-      total_cpu_time := times.tms_utime +. times.tms_cutime
+      let ts = Unix.gettimeofday () in
+      wall_time.end_time <- ts;
+      domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
+  | Runtime_events.EV_DOMAIN_SPAWN ->
+      domain_elapsed_times.(domain_id) <- Unix.gettimeofday ()
+  | Runtime_events.EV_DOMAIN_TERMINATE ->
+      domain_elapsed_times.(domain_id) <-
+        Unix.gettimeofday () -. domain_elapsed_times.(domain_id)
   | _ -> ()
 
 let print_percentiles json output hist =
-  let ms ns = ns /. 1000000. in
+  let ms ns = ns /. 1_000_000. in
   let mean_latency = H.mean hist |> ms
   and max_latency = float_of_int (H.max hist) |> ms in
   let percentiles =
-    [|
-      25.0;
-      50.0;
-      60.0;
-      70.0;
-      75.0;
-      80.0;
-      85.0;
-      90.0;
-      95.0;
-      96.0;
-      97.0;
-      98.0;
-      99.0;
-      99.9;
-      99.99;
-      99.999;
-      99.9999;
-      100.0;
-    |]
+    [| 25.0; 50.0; 60.0; 70.0; 75.0; 80.0; 85.0; 90.0; 95.0; 96.0; 97.0; 
+       98.0; 99.0; 99.9; 99.99; 99.999; 99.9999; 100.0; |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
   let to_sec x = float_of_int x /. 1000000000. in
   let real_time = wall_time.end_time -. wall_time.start_time in
-  let gc_time = to_sec !total_gc_time in
+  let total_gc_time = to_sec @@ Array.fold_left ( + ) 0 domain_gc_times in
+
+  let total_cpu_time = ref 0. in
+  let ap = Array.combine domain_elapsed_times domain_gc_times in
+  Array.iteri (fun i (cpu_time, gc_time) ->
+    if gc_time > 0 && cpu_time = 0. then
+      Printf.fprintf stderr
+        "[Olly] Warning: Domain %d has GC time but no CPU time\n" i
+    else
+      total_cpu_time := !total_cpu_time +. cpu_time) ap;
+
   if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
@@ -66,15 +65,17 @@ let print_percentiles json output hist =
     Printf.fprintf oc "Execution times:\n";
     Printf.fprintf oc "Wall time (s):\t%.2f\n" real_time;
     Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
-    Printf.fprintf oc "GC time (s):\t%.2f\n" gc_time;
+    Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
-      (gc_time /. !total_cpu_time *. 100.);
+      (total_gc_time /. !total_cpu_time *. 100.);
     Printf.fprintf oc "\n";
-    Printf.fprintf oc "GC time per domain (s):\n";
-    Array.iteri
-      (fun i x ->
-        if x > 0 then Printf.fprintf oc "Domain%d: \t%.2f\n" i (to_sec x))
-      domain_gc_times;
+    Printf.fprintf oc "Per domain stats:\n";
+    Printf.fprintf oc "Domain\t Wall(s)\t GC(s)\t GC(%%)\n";
+    Array.iteri (fun i (c,g) ->
+      if c > 0. then
+        Printf.fprintf oc "%d\t %.2f\t %.2f\t %.2f\n" i c (to_sec g)
+          ((to_sec g) *. 100. /. c))
+      (Array.combine domain_elapsed_times domain_gc_times);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -113,7 +114,6 @@ let gc_stats json output exec_args =
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
         assert (H.record_value hist latency);
-        total_gc_time := !total_gc_time + latency;
         domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
     | _ -> ()
   in
