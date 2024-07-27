@@ -8,7 +8,7 @@ let domain_elapsed_times = Array.make 128 (0.)
 let domain_gc_times = Array.make 128 0
 
 let lifecycle domain_id ts lifecycle_event _data =
-  let ts = float_of_int (Int64.(to_int @@ Ts.to_int64 ts)) in
+  let ts = float_of_int (Int64.(to_int @@ Ts.to_int64 ts)) /. 1_000_000_000. in
   match lifecycle_event with
   | Runtime_events.EV_RING_START ->
       wall_time.start_time <- ts;
@@ -23,7 +23,9 @@ let lifecycle domain_id ts lifecycle_event _data =
   | _ -> ()
 
 let print_percentiles json output hist =
+  let to_sec x = float_of_int x /. 1_000_000_000. in
   let ms ns = ns /. 1_000_000. in
+
   let mean_latency = H.mean hist |> ms
   and max_latency = float_of_int (H.max hist) |> ms in
   let percentiles =
@@ -31,7 +33,6 @@ let print_percentiles json output hist =
        98.0; 99.0; 99.9; 99.99; 99.999; 99.9999; 100.0; |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let to_sec x = float_of_int x /. 1000000000. in
   let real_time = wall_time.end_time -. wall_time.start_time in
   let total_gc_time = to_sec @@ Array.fold_left ( + ) 0 domain_gc_times in
 
