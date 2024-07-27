@@ -7,21 +7,19 @@ let wall_time = { start_time = 0.; end_time = 0. }
 let domain_elapsed_times = Array.make 128 (0.)
 let domain_gc_times = Array.make 128 0
 
-let lifecycle domain_id _ts lifecycle_event _data =
+let lifecycle domain_id ts lifecycle_event _data =
+  let ts = float_of_int (Int64.(to_int @@ Ts.to_int64 ts)) in
   match lifecycle_event with
   | Runtime_events.EV_RING_START ->
-      let ts = Unix.gettimeofday () in
       wall_time.start_time <- ts;
       domain_elapsed_times.(domain_id) <- ts
   | Runtime_events.EV_RING_STOP ->
-      let ts = Unix.gettimeofday () in
       wall_time.end_time <- ts;
       domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
   | Runtime_events.EV_DOMAIN_SPAWN ->
-      domain_elapsed_times.(domain_id) <- Unix.gettimeofday ()
+      domain_elapsed_times.(domain_id) <- ts
   | Runtime_events.EV_DOMAIN_TERMINATE ->
-      domain_elapsed_times.(domain_id) <-
-        Unix.gettimeofday () -. domain_elapsed_times.(domain_id)
+      domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
   | _ -> ()
 
 let print_percentiles json output hist =
