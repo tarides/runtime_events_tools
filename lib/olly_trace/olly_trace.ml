@@ -1,6 +1,6 @@
 module Format = Olly_format_backend
 
-let trace fmt trace_filename exec_args =
+let trace fmt trace_filename emit_counter exec_args =
   let open Format.Event in
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
@@ -13,13 +13,15 @@ let trace fmt trace_filename exec_args =
       }
   in
   let runtime_counter ring_id ts counter value =
-    Format.emit tracer
-      {
-        name = Runtime_events.runtime_counter_name counter;
-        ts = Runtime_events.Timestamp.to_int64 ts;
-        ring_id;
-        kind = Counter value;
-      }
+    if emit_counter then
+      Format.emit tracer
+        {
+          name = Runtime_events.runtime_counter_name counter;
+          ts = Runtime_events.Timestamp.to_int64 ts;
+          ring_id;
+          kind = Counter value;
+        }
+    else ()
   in
   let runtime_begin = runtime_phase SpanBegin
   and runtime_end = runtime_phase SpanEnd
@@ -46,6 +48,10 @@ let trace_cmd format_list =
   let trace_filename =
     let doc = "Target trace file name." in
     Arg.(required & pos 0 (some string) None & info [] ~docv:"TRACEFILE" ~doc)
+  in
+  let emit_counter =
+    let doc = "Emit runtime counter events." in
+    Arg.(value & flag & info [ "c"; "emit-counters" ] ~doc)
   in
   let format_option =
     let doc =
@@ -74,4 +80,4 @@ let trace_cmd format_list =
   in
   let doc = "Save the runtime trace to file." in
   let info = Cmd.info "trace" ~doc ~sdocs ~man in
-  Cmd.v info Term.(const trace $ format_option $ trace_filename $ exec_args 1)
+  Cmd.v info Term.(const trace $ format_option $ trace_filename $ emit_counter $ exec_args 1)
