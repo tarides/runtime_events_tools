@@ -2,13 +2,13 @@ module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 
 type ts = { mutable start_time : float; mutable end_time : float }
-let wall_time = { start_time = 0.; end_time = 0. }
 
-let domain_elapsed_times = Array.make 128 (0.)
+let wall_time = { start_time = 0.; end_time = 0. }
+let domain_elapsed_times = Array.make 128 0.
 let domain_gc_times = Array.make 128 0
 
 let lifecycle domain_id ts lifecycle_event _data =
-  let ts = float_of_int (Int64.(to_int @@ Ts.to_int64 ts)) /. 1_000_000_000. in
+  let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
   match lifecycle_event with
   | Runtime_events.EV_RING_START ->
       wall_time.start_time <- ts;
@@ -16,8 +16,7 @@ let lifecycle domain_id ts lifecycle_event _data =
   | Runtime_events.EV_RING_STOP ->
       wall_time.end_time <- ts;
       domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
-  | Runtime_events.EV_DOMAIN_SPAWN ->
-      domain_elapsed_times.(domain_id) <- ts
+  | Runtime_events.EV_DOMAIN_SPAWN -> domain_elapsed_times.(domain_id) <- ts
   | Runtime_events.EV_DOMAIN_TERMINATE ->
       domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
   | _ -> ()
@@ -29,8 +28,26 @@ let print_percentiles json output hist =
   let mean_latency = H.mean hist |> ms
   and max_latency = float_of_int (H.max hist) |> ms in
   let percentiles =
-    [| 25.0; 50.0; 60.0; 70.0; 75.0; 80.0; 85.0; 90.0; 95.0; 96.0; 97.0; 
-       98.0; 99.0; 99.9; 99.99; 99.999; 99.9999; 100.0; |]
+    [|
+      25.0;
+      50.0;
+      60.0;
+      70.0;
+      75.0;
+      80.0;
+      85.0;
+      90.0;
+      95.0;
+      96.0;
+      97.0;
+      98.0;
+      99.0;
+      99.9;
+      99.99;
+      99.999;
+      99.9999;
+      100.0;
+    |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
   let real_time = wall_time.end_time -. wall_time.start_time in
@@ -38,12 +55,13 @@ let print_percentiles json output hist =
 
   let total_cpu_time = ref 0. in
   let ap = Array.combine domain_elapsed_times domain_gc_times in
-  Array.iteri (fun i (cpu_time, gc_time) ->
-    if gc_time > 0 && cpu_time = 0. then
-      Printf.fprintf stderr
-        "[Olly] Warning: Domain %d has GC time but no CPU time\n" i
-    else
-      total_cpu_time := !total_cpu_time +. cpu_time) ap;
+  Array.iteri
+    (fun i (cpu_time, gc_time) ->
+      if gc_time > 0 && cpu_time = 0. then
+        Printf.fprintf stderr
+          "[Olly] Warning: Domain %d has GC time but no CPU time\n" i
+      else total_cpu_time := !total_cpu_time +. cpu_time)
+    ap;
 
   if json then
     let distribs =
@@ -70,10 +88,11 @@ let print_percentiles json output hist =
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     Printf.fprintf oc "Domain\t Wall(s)\t GC(s)\t GC(%%)\n";
-    Array.iteri (fun i (c,g) ->
-      if c > 0. then
-        Printf.fprintf oc "%d\t %.2f\t %.2f\t %.2f\n" i c (to_sec g)
-          ((to_sec g) *. 100. /. c))
+    Array.iteri
+      (fun i (c, g) ->
+        if c > 0. then
+          Printf.fprintf oc "%d\t %.2f\t %.2f\t %.2f\n" i c (to_sec g)
+            (to_sec g *. 100. /. c))
       (Array.combine domain_elapsed_times domain_gc_times);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
