@@ -23,7 +23,7 @@
  (package runtime_events_tools)
  (deps %{bin:olly} test_gc_stats.exe)
  (action
-  (run olly gc-stats "./test_gc_stats.exe 19")))
+  (run olly gc-stats ./test_gc_stats.exe 19)))
 
 (rule
  (alias runtest)
