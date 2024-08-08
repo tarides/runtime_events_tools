@@ -1,3 +1,7 @@
+### Unreleased
+
+* Allow olly to attach to an external process (#45, @eutro)
+
 ### 0.5.1
 
 * Fix support on ARM64 platforms (Linux and MacOS) (#34, @tmcgilchrist)
