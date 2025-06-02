@@ -91,7 +91,7 @@ let print_percentiles json output hist =
     Array.iteri
       (fun i (c, g) ->
         if c > 0. then
-          Printf.fprintf oc "%d\t %.2f\t %.2f\t %.2f\n" i c (to_sec g)
+          Printf.fprintf oc "%d\t %.2f\t\t %.2f\t %.2f\n" i c (to_sec g)
             (to_sec g *. 100. /. c))
       (Array.combine domain_elapsed_times domain_gc_times);
     Printf.fprintf oc "\n";
@@ -138,9 +138,12 @@ let gc_stats json output exec_args =
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
   let open Olly_common.Launch in
-  olly
-    { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
-    exec_args
+  try
+    olly
+      { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
+      exec_args
+  with
+  | Fail msg -> Printf.eprintf "%s\n" msg; exit (-1)
 
 let gc_stats_cmd =
   let open Cmdliner in
@@ -189,4 +192,5 @@ let gc_stats_cmd =
   in
   let doc = "Report the GC latency profile and stats." in
   let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
+
   Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)

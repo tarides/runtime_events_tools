@@ -37,7 +37,9 @@ let exec_args p =
   let exec_and_args, ea_docv =
     let doc = "Executable and arguments to trace." in
     let docv = "EXECUTABLE" in
-    (Arg.(value & pos_right (p - 1) string [] & info [] ~docv ~doc), docv)
+    (* let str_list : string list Arg.conv = Arg.(list ~sep:' ' Arg.string) in *)
+    Term.(const List.concat $ Arg.(value & pos_right (p - 1) (list ~sep: ' ' string) [] & info [] ~docv ~doc), docv)
+
   in
   let attach_opt, ao_docv =
     let doc =
@@ -90,7 +92,8 @@ let exec_args p =
     | _ ->
         Error (Printf.sprintf "more than one of %s specified" (cat_docvs "and"))
   in
-  Term.(term_result' ~usage:true (const combine $ attach_opt $ exec_and_args))
+  Term.(term_result' ~usage:true (const combine $ attach_opt
+        $ exec_and_args))
 
 let main name commands =
   let help_cmd =
