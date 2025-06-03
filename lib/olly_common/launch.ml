@@ -5,16 +5,20 @@ type subprocess = {
   alive : unit -> bool;
   cursor : Runtime_events.cursor;
   close : unit -> unit;
+  pid : int;
 }
 
 type exec_config =
   | Attach of string * int
   | Execute of string list
 
-(* TODO Exceptions are bad and make FP programmers cry! *)
+(* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
-let exec_process argsl =
+let exec_process (argsl : string list) : subprocess =
+  if not (List.length argsl > 0) then
+    raise (Fail (Printf.sprintf "no executable provided for exec_process"));
+
   let executable_filename = List.hd argsl in
 
   (* TODO Set the temp directory. We should make this configurable. *)
@@ -23,6 +27,7 @@ let exec_process argsl =
     raise (Fail (Printf.sprintf "directory %s does not exist" dir));
   if not @@ Sys.is_directory dir then
     raise (Fail (Printf.sprintf "file %s is not a directory" dir));
+
   let env =
     Array.append
       [|
@@ -55,9 +60,9 @@ let exec_process argsl =
     in
     Unix.unlink ring_file
   in
-  { alive; cursor; close }
+  { alive; cursor; close; pid = child_pid }
 
-let attach_process dir pid =
+let attach_process (dir : string) (pid : int) : subprocess =
   let cursor = Runtime_events.create_cursor (Some (dir, pid)) in
   let alive () =
     try
@@ -65,9 +70,9 @@ let attach_process dir pid =
       true
     with Unix.Unix_error (Unix.ESRCH, _, _) -> false
   and close () = Runtime_events.free_cursor cursor in
-  { alive; cursor; close }
+  { alive; cursor; close; pid }
 
-let launch_process exec_args =
+let launch_process (exec_args : exec_config) : subprocess =
   match exec_args with
   | Execute argsl -> exec_process argsl
   | Attach (dir, pid) -> attach_process dir pid

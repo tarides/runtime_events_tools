@@ -21,7 +21,8 @@
   (cmdliner (>= 1.1.0))
   tracing
   (ocaml_intrinsics (>= v0.16.1))
-  (menhir :with-test)))
+  (menhir :with-test)
+  (alcotest (and :with-test (>= 1.9.0)))))
 
 (package
  (name runtime_events_tools_bare)
