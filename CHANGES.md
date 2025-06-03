@@ -1,6 +1,10 @@
 ### Unreleased
 
 * Allow olly to attach to an external process (#45, @eutro)
+* Fix executable arguments when launching a process. (#55, @tmcgilchrist)
+* Emit runtime counter events for tracing (#46, @kayceesrk)
+* Make counters optional. (#49, @kayceesrk)
+* Fix GC stats to use timestamp from events (#48,  @kayceesrk)
 
 ### 0.5.1
 
