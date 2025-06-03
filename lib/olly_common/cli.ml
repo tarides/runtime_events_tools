@@ -37,7 +37,9 @@ let exec_args p =
   let exec_and_args, ea_docv =
     let doc = "Executable and arguments to trace." in
     let docv = "EXECUTABLE" in
-    (Arg.(value & pos_right (p - 1) string [] & info [] ~docv ~doc), docv)
+    Term.(const List.concat
+          $ Arg.(value & pos_right (p - 1) (list ~sep: ' ' string) []
+          & info [] ~docv ~doc), docv)
   in
   let attach_opt, ao_docv =
     let doc =
