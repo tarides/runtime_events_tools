@@ -1,5 +1,7 @@
 ### Unreleased
 
+### 0.5.2
+
 * Allow olly to attach to an external process (#45, @eutro)
 * Fix executable arguments when launching a process. (#55, @tmcgilchrist)
 * Emit runtime counter events for tracing (#46, @kayceesrk)
