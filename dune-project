@@ -1,4 +1,4 @@
-(lang dune 3.2)
+(lang dune 3.16)
 
 (name runtime_events_tools)
 (version "0.5.1")
