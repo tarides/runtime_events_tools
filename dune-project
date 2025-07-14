@@ -19,7 +19,7 @@
   (ocaml (>= "5.0.0~"))
   hdr_histogram
   (cmdliner (>= 1.1.0))
-  tracing
+  trace-fuchsia
   (ocaml_intrinsics (>= v0.16.1))
   (menhir :with-test)
   (alcotest (and :with-test (>= 1.9.0)))))
