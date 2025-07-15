@@ -59,10 +59,12 @@
 
 (executables
  (names run_endlessly)
+ (modules run_endlessly)
  (libraries unix))
 
 (test
  (name test_launch)
+ (modules test_launch)
  (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
