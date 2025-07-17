@@ -56,15 +56,19 @@
    (run olly_bare trace --format=json test-bare-json.trace ./test_fib.exe))))
 
 ; Dummy process for testing process launching.
+
 (executables
  (names run_endlessly)
+ (modules run_endlessly)
  (libraries unix))
 
 (test
  (name test_launch)
+ (modules test_launch)
  (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (libraries olly_common alcotest)
-  (deps run_endlessly.exe)
- (action (run %{test} --show-errors)))
+ (deps run_endlessly.exe)
+ (action
+  (run %{test} --show-errors)))
