@@ -8,9 +8,7 @@ type subprocess = {
   pid : int;
 }
 
-type exec_config =
-  | Attach of string * int
-  | Execute of string list
+type exec_config = Attach of string * int | Execute of string list
 
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
@@ -37,12 +35,13 @@ let exec_process (argsl : string list) : subprocess =
       |]
       (Unix.environment ())
   in
-  let child_pid = try
-    Unix.create_process_env executable_filename (Array.of_list argsl) env
-      Unix.stdin Unix.stdout Unix.stderr
-    with
-    | Unix.Unix_error(Unix.ENOENT, _, _) ->
-       raise (Fail (Printf.sprintf "executable %s not found" executable_filename))
+  let child_pid =
+    try
+      Unix.create_process_env executable_filename (Array.of_list argsl) env
+        Unix.stdin Unix.stdout Unix.stderr
+    with Unix.Unix_error (Unix.ENOENT, _, _) ->
+      raise
+        (Fail (Printf.sprintf "executable %s not found" executable_filename))
   in
   Unix.sleepf 0.1;
   let cursor = Runtime_events.create_cursor (Some (dir, child_pid)) in
@@ -55,9 +54,7 @@ let exec_process (argsl : string list) : subprocess =
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
        the child process not to remove them *)
-    let ring_file =
-      Filename.concat dir (string_of_int child_pid ^ ".events")
-    in
+    let ring_file = Filename.concat dir (string_of_int child_pid ^ ".events") in
     Unix.unlink ring_file
   in
   { alive; cursor; close; pid = child_pid }
