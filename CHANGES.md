@@ -1,4 +1,5 @@
 ### Unreleased
+* Use trace instead of tracing (#57, @patricoferris)
 
 ### 0.5.2
 
