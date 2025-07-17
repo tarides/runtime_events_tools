@@ -142,8 +142,9 @@ let gc_stats json output exec_args =
     olly
       { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
       exec_args
-  with
-  | Fail msg -> Printf.eprintf "%s\n" msg; exit (-1)
+  with Fail msg ->
+    Printf.eprintf "%s\n" msg;
+    exit (-1)
 
 let gc_stats_cmd =
   let open Cmdliner in

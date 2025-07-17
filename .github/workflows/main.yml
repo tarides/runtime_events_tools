@@ -41,3 +41,7 @@ jobs:
       - run: opam exec -- dune build
 
       - run: opam exec -- dune runtest
+
+      - run: |
+          opam install . --with-dev-setup --with-test --deps-only
+          opam exec -- dune build @fmt
