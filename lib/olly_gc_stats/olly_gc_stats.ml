@@ -107,7 +107,7 @@ let print_percentiles json output hist =
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
-let gc_stats json output exec_args =
+let gc_stats poll_sleep json output exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -140,7 +140,15 @@ let gc_stats json output exec_args =
   let open Olly_common.Launch in
   try
     olly
-      { empty_config with runtime_begin; runtime_end; lifecycle; init; cleanup }
+      {
+        empty_config with
+        runtime_begin;
+        runtime_end;
+        lifecycle;
+        init;
+        cleanup;
+        poll_sleep;
+      }
       exec_args
   with Fail msg ->
     Printf.eprintf "%s\n" msg;
@@ -194,4 +202,7 @@ let gc_stats_cmd =
   let doc = "Report the GC latency profile and stats." in
   let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
 
-  Cmd.v info Term.(const gc_stats $ json_option $ output_option $ exec_args 0)
+  Cmd.v info
+    Term.(
+      const gc_stats $ freq_option $ json_option $ output_option
+      $ exec_args 0)

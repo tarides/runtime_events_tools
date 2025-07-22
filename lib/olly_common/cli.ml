@@ -33,6 +33,17 @@ let help man_format cmds topic =
           in
           `Ok (Manpage.print man_format Format.std_formatter page))
 
+let freq_option =
+  let doc =
+    "Set the interval that olly sleeps in seconds, after performing a \
+     [Runtime_events.read_poll]. Fractions of seconds are supported. A value \
+     of 0.0 will skip sleeping altogether."
+  in
+  Arg.(
+    value
+    & opt float 0.1 (* Poll at 10Hz by default. *)
+    & info [ "freq" ] ~docv:"freq" ~doc)
+
 let exec_args p =
   let exec_and_args, ea_docv =
     let doc = "Executable and arguments to trace." in
