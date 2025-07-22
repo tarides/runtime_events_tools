@@ -98,8 +98,8 @@ Percentile 	 Latency (ms)
 
 ### trace
 
-`olly trace` will record the runtime trace log in 
-[Fuchsia trace format](https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format) 
+`olly trace` will record the runtime trace log in
+[Fuchsia trace format](https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format)
 or
 [Chrome tracing format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview)
 . Format of the trace file can be specified with the

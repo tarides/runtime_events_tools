@@ -1,5 +1,6 @@
 ### Unreleased
 * Use trace instead of tracing (#57 #59, @patricoferris @tmcgilchrist)
+* Add an option to control sleep interval between calls to read_poll (#60, @tomjridge @tmcgilchrist)
 
 ### 0.5.2
 
