@@ -1,5 +1,5 @@
 ### Unreleased
-* Use trace instead of tracing (#57, @patricoferris)
+* Use trace instead of tracing (#57 #59, @patricoferris @tmcgilchrist)
 
 ### 0.5.2
 

@@ -20,6 +20,7 @@
   hdr_histogram
   (cmdliner (>= 1.1.0))
   (trace-fuchsia (>= 0.10))
+  (trace (>= 0.10))
   (menhir :with-test)
   (ocamlformat (and :with-dev-setup (= 0.27.0)))
   (alcotest (and :with-test (>= 1.9.0)))))

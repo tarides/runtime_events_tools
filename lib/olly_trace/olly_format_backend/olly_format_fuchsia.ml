@@ -19,7 +19,7 @@ let flush trace =
 
 let create ~filename =
   let buf_pool = Trace_fuchsia.Buf_pool.create () in
-  let buf = Trace_fuchsia.Buf_chain.create ~sharded:false ~buf_pool () in
+  let buf = Trace_fuchsia.Buf_chain.create ~sharded:true ~buf_pool () in
   let oc = Out_channel.open_bin filename in
   let exporter = Trace_fuchsia.Exporter.of_out_channel ~close_channel:true oc in
   let subscriber =
