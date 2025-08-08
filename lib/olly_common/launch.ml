@@ -13,14 +13,17 @@ type exec_config = Attach of string * int | Execute of string list
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
-let exec_process (argsl : string list) : subprocess =
+let exec_process ?dir ?(verbose_flag = false) (argsl : string list) : subprocess =
   if not (List.length argsl > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
   let executable_filename = List.hd argsl in
 
-  (* TODO Set the temp directory. We should make this configurable. *)
-  let dir = Filename.get_temp_dir_name () |> Unix.realpath in
+  let dir =
+    match dir with
+    | None -> Filename.get_temp_dir_name () |> Unix.realpath
+    | Some path -> Unix.realpath path
+  in
   if not @@ Sys.file_exists dir then
     raise (Fail (Printf.sprintf "directory %s does not exist" dir));
   if not @@ Sys.is_directory dir then
@@ -74,9 +77,9 @@ let attach_process (dir : string) (pid : int) : subprocess =
   and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
-let launch_process (exec_args : exec_config) : subprocess =
+let launch_process ?dir ?(verbose_flag = false) (exec_args : exec_config) : subprocess =
   match exec_args with
-  | Execute argsl -> exec_process argsl
+  | Execute argsl -> exec_process ?dir ~verbose_flag argsl
   | Attach (dir, pid) -> attach_process dir pid
 
 let collect_events poll_sleep child callbacks =
@@ -99,6 +102,7 @@ type consumer_config = {
   init : unit -> unit;
   cleanup : unit -> unit;
   poll_sleep : float;
+  runtime_events_dir : string option;
 }
 
 let empty_config =
@@ -111,12 +115,14 @@ let empty_config =
     init = (fun () -> ());
     cleanup = (fun () -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
+    runtime_events_dir = None;
+    (* Use default tmp directory *)
   }
 
 let olly config (exec_args : exec_config) =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
-      let child = launch_process exec_args in
+      let child = launch_process ?dir:config.runtime_events_dir exec_args in
       Fun.protect ~finally:child.close (fun () ->
           let callbacks =
             let {
