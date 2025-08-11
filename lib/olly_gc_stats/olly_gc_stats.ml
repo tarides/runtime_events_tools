@@ -139,20 +139,19 @@ let gc_stats poll_sleep json output exec_args =
   let cleanup () = print_percentiles json output hist in
   let open Olly_common.Launch in
   try
-    olly
-      {
-        empty_config with
-        runtime_begin;
-        runtime_end;
-        lifecycle;
-        init;
-        cleanup;
-        poll_sleep;
-      }
-      exec_args
-  with Fail msg ->
-    Printf.eprintf "%s\n" msg;
-    exit (-1)
+    `Ok
+      (olly
+         {
+           empty_config with
+           runtime_begin;
+           runtime_end;
+           lifecycle;
+           init;
+           cleanup;
+           poll_sleep;
+         }
+         exec_args)
+  with Fail msg -> `Error (false, msg)
 
 let gc_stats_cmd =
   let open Cmdliner in
@@ -204,5 +203,6 @@ let gc_stats_cmd =
 
   Cmd.v info
     Term.(
-      const gc_stats $ freq_option $ json_option $ output_option
-      $ exec_args 0)
+      ret
+        (const gc_stats $ freq_option $ json_option $ output_option
+       $ exec_args 0))

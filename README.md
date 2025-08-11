@@ -100,8 +100,7 @@ If olly does not read a domain's ring buffer fast enough then some events will b
 
 1. Use `--freq` option to make olly read the ring buffer more frequently.
 2. Set `OCAMLRUNPARAM=e=20` to increase the size of the ring buffer.
-3. Use `--filter` to omit unnecessary events. e.g. `--filter=EV_DOMAIN_CONDITION_WAIT` to omit event spanning waiting in Condition.wait.
-4. If events are being lost at startup, consider adding a brief sleep to the beginning of your program so olly has time to attach to it.
+3. If events are being lost at startup, consider adding a brief sleep to the beginning of your program so olly has time to attach to it.
 
 ## Dependencies
 
