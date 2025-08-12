@@ -1,27 +1,33 @@
 let process_launch_failure () =
   let open Olly_common in
   let open Alcotest in
+  let config = { Launch.log_wsize = None; dir = None } in
   match_raises "executable not found on path should not launch"
     (* Executable not found on path *)
     (function Launch.Fail _ -> true | _exn -> false)
-    (fun () -> ignore (Launch.exec_process [ "missing.exe" ]));
+    (fun () ->
+      ignore (Launch.launch_process config (Execute [ "missing.exe" ])));
 
   match_raises "non-executable should not launch"
     (* File for exec_process is not an executable *)
     (function Unix.Unix_error (Unix.EACCES, _, _) -> true | _exn -> false)
-    (fun () -> ignore (Launch.exec_process [ "./run_endlessly.ml" ]));
+    (fun () ->
+      ignore (Launch.launch_process config (Execute [ "./run_endlessly.ml" ])));
 
   match_raises "empty executable string should not launch"
     (* Empty executable string provided *)
     (function Launch.Fail _ -> true | _exn -> false)
-    (fun () -> ignore (Launch.exec_process [ "" ]))
+    (fun () -> ignore (Launch.launch_process config (Execute [ "" ])))
 
 let process_launch () =
   let open Olly_common in
+  let config = { Launch.log_wsize = None; dir = None } in
   Alcotest.(check bool)
     "process should launch" true
     (try
-       let a = Launch.exec_process [ "./run_endlessly.exe" ] in
+       let a =
+         Launch.launch_process config (Execute [ "./run_endlessly.exe" ])
+       in
        try
          (* Sending signal Zero to kill checks the process exists for Unix. *)
          Unix.kill a.pid 0;

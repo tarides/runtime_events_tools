@@ -8,19 +8,20 @@ type subprocess = {
   pid : int;
 }
 
+type runtime_events = { log_wsize : int option; dir : string option }
 type exec_config = Attach of string * int | Execute of string list
 
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
-let exec_process ?dir ?(verbose_flag = false) (argsl : string list) : subprocess =
-  if not (List.length argsl > 0) then
+let exec_process (config : runtime_events) args =
+  if not (List.length args > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
-  let executable_filename = List.hd argsl in
+  let executable_filename = List.hd args in
 
   let dir =
-    match dir with
+    match config.dir with
     | None -> Filename.get_temp_dir_name () |> Unix.realpath
     | Some path -> Unix.realpath path
   in
@@ -32,15 +33,23 @@ let exec_process ?dir ?(verbose_flag = false) (argsl : string list) : subprocess
   let env =
     Array.append
       [|
+        (* See https://ocaml.org/manual/5.3/runtime-tracing.html#s:runtime-tracing-environment-variables *)
         "OCAML_RUNTIME_EVENTS_START=1";
         "OCAML_RUNTIME_EVENTS_DIR=" ^ dir;
         "OCAML_RUNTIME_EVENTS_PRESERVE=1";
+        ((* See https://ocaml.org/manual/5.3/runtime.html#s:ocamlrun-options *)
+         let log_wsize =
+           match config.log_wsize with
+           | Some i -> "e=" ^ Int.to_string i
+           | None -> ""
+         in
+         "OCAMLRUNPARAM=" ^ log_wsize);
       |]
       (Unix.environment ())
   in
   let child_pid =
     try
-      Unix.create_process_env executable_filename (Array.of_list argsl) env
+      Unix.create_process_env executable_filename (Array.of_list args) env
         Unix.stdin Unix.stdout Unix.stderr
     with Unix.Unix_error (Unix.ENOENT, _, _) ->
       raise
@@ -77,9 +86,9 @@ let attach_process (dir : string) (pid : int) : subprocess =
   and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
-let launch_process ?dir ?(verbose_flag = false) (exec_args : exec_config) : subprocess =
+let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
-  | Execute argsl -> exec_process ?dir ~verbose_flag argsl
+  | Execute argsl -> exec_process config argsl
   | Attach (dir, pid) -> attach_process dir pid
 
 let collect_events poll_sleep child callbacks =
@@ -103,6 +112,7 @@ type consumer_config = {
   cleanup : unit -> unit;
   poll_sleep : float;
   runtime_events_dir : string option;
+  runtime_events_log_wsize : int option;
 }
 
 let empty_config =
@@ -115,14 +125,20 @@ let empty_config =
     init = (fun () -> ());
     cleanup = (fun () -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
-    runtime_events_dir = None;
-    (* Use default tmp directory *)
+    runtime_events_dir = None (* Use default tmp directory *);
+    runtime_events_log_wsize = None; (* Use default size 16. *)
   }
 
-let olly config (exec_args : exec_config) =
+let olly config exec_args =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
-      let child = launch_process ?dir:config.runtime_events_dir exec_args in
+      let runtime_config =
+        {
+          dir = config.runtime_events_dir;
+          log_wsize = config.runtime_events_log_wsize;
+        }
+      in
+      let child = launch_process runtime_config exec_args in
       Fun.protect ~finally:child.close (fun () ->
           let callbacks =
             let {
