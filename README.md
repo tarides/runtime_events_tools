@@ -68,6 +68,15 @@ Percentile       Latency (ms)
 99.9990          72.55
 99.9999          72.55
 100.0000         72.55
+
+GC allocations (in words):
+Total heap:	 501516808
+Minor heap:	 602373895
+Promoted words:	 100857087 (16.74%)
+
+Minor Gen: 904 collections
+Major Gen: 34 collections 0 forced collections
+Compactions: 0
 ```
 
 ### Tracing a program

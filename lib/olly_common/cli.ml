@@ -15,6 +15,17 @@ let help_secs =
 
 let sdocs = Manpage.s_common_options
 
+let freq_option =
+  let doc =
+    "Set the interval that olly sleeps in seconds, after performing a \
+     [Runtime_events.read_poll]. Fractions of seconds are supported. A value \
+     of 0.0 will skip sleeping altogether."
+  in
+  Arg.(
+    value
+    & opt float 0.1 (* Poll at 10Hz by default. *)
+    & info [ "freq" ] ~docv:"freq" ~doc)
+
 let runtime_events_dir =
   let doc =
     "Sets the directory where the .events files containing the runtime event \
@@ -30,17 +41,6 @@ let runtime_events_log_wsize =
   in
   Arg.(
     value & opt (some int) None & info [ "log-wsize" ] ~docv:"log-wsize" ~doc)
-
-let freq_option =
-  let doc =
-    "Set the interval that olly sleeps in seconds, after performing a \
-     [Runtime_events.read_poll]. Fractions of seconds are supported. A value \
-     of 0.0 will skip sleeping altogether."
-  in
-  Arg.(
-    value
-    & opt float 0.1 (* Poll at 10Hz by default. *)
-    & info [ "freq" ] ~docv:"freq" ~doc)
 
 let exec_args p =
   let exec_and_args, ea_docv =
