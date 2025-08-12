@@ -1,7 +1,7 @@
 module Format = Olly_format_backend
 
 let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
-    exec_args =
+    runtime_events_log_wsize exec_args =
   let open Format.Event in
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
@@ -42,6 +42,7 @@ let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
       cleanup;
       poll_sleep;
       runtime_events_dir;
+      runtime_events_log_wsize;
     }
     exec_args
 
@@ -56,15 +57,6 @@ let trace_cmd format_list =
   let emit_counter =
     let doc = "Emit runtime counter events." in
     Arg.(value & flag & info [ "c"; "emit-counters" ] ~doc)
-  in
-
-  let runtime_events_dir =
-    let doc =
-      "Sets the directory where the .events files containing the runtime event \
-       tracing system’s ring buffers will be located.\n\n\
-      \               If not specified a temporary directory will be used."
-    in
-    Arg.(value & opt (some string) None & info [ "d"; "dir" ] ~docv:"dir" ~doc)
   in
 
   let format_option =
@@ -96,5 +88,5 @@ let trace_cmd format_list =
   let info = Cmd.info "trace" ~doc ~sdocs ~man in
   Cmd.v info
     Term.(
-      const trace $ freq_option $ format_option $ trace_filename $ emit_counter $
-                                                                     runtime_events_dir $ exec_args 1)
+      const trace $ freq_option $ format_option $ trace_filename $ emit_counter
+      $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 1)
