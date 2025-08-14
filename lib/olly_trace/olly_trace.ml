@@ -1,6 +1,6 @@
 module Format = Olly_format_backend
 
-let trace fmt trace_filename emit_counter exec_args =
+let trace poll_sleep fmt trace_filename emit_counter exec_args =
   let open Format.Event in
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
@@ -39,6 +39,7 @@ let trace fmt trace_filename emit_counter exec_args =
       lifecycle;
       init;
       cleanup;
+      poll_sleep;
     }
     exec_args
 
@@ -49,10 +50,12 @@ let trace_cmd format_list =
     let doc = "Target trace file name." in
     Arg.(required & pos 0 (some string) None & info [] ~docv:"TRACEFILE" ~doc)
   in
+
   let emit_counter =
     let doc = "Emit runtime counter events." in
     Arg.(value & flag & info [ "c"; "emit-counters" ] ~doc)
   in
+
   let format_option =
     let doc =
       "Format of the target trace, options are: "
@@ -82,4 +85,5 @@ let trace_cmd format_list =
   let info = Cmd.info "trace" ~doc ~sdocs ~man in
   Cmd.v info
     Term.(
-      const trace $ format_option $ trace_filename $ emit_counter $ exec_args 1)
+      const trace $ freq_option $ format_option $ trace_filename $ emit_counter
+      $ exec_args 1)

@@ -1,15 +1,18 @@
 # Runtime events tools
 
-A collection of observability tools around the runtime events tracing system
-introduced in OCaml 5.0.
+A collection of observability tools around the [runtime events tracing](https://ocaml.org/manual/runtime-tracing.html) system introduced in OCaml 5.0.
 
-## olly
+To install runtime_events_tools:
 
-olly provides a number of sub-commands.
+```
+opam install runtime_events_tools
+```
 
-### gc-stats
+The main tool is called `olly`, it provides a number of sub-commands for gathering runtime events and reporting. Run `olly --help` to see all available options.
 
-`olly gc-stats` will report the GC running time and GC tail latency profile of an OCaml executable.
+### Reporting Garbage Collection Statistics
+
+Running `olly gc-stats` will report the GC running time and GC tail latency profile of an OCaml executable.
 
 | Metric             | Description                                                                                                                                   |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
@@ -20,90 +23,60 @@ olly provides a number of sub-commands.
 | GC time per domain | Time spent by every domain performing garbage collection (major and minor cycles). Domains are reported with their domain ID (e.g. `Domain0`) |
 | GC latency profile | Mean, standard deviation and percentile latency profile of GC events.                                                                         |
 
+Note: all times are wall-clock and so include time spent blocking.
 
 ```bash
-$ olly gc-stats 'binarytrees.exe 19' # Use quotes for commands with arguments
+$ olly gc-stats 'EXECUTABLE' # Use quotes for commands with arguments
 Execution times:
-Wall time (s):	2.01
-CPU time (s):	5.73
-GC time (s):	3.15
-GC overhead (% of CPU time):	55.00%
+Wall time (s):  114.15
+CPU time (s):   1012.84
+GC time (s):    173.08
+GC overhead (% of CPU time):    17.09%
 
-GC time per domain (s):
-Domain0: 	1.15
-Domain1: 	0.99
-Domain2: 	1.01
+Per domain stats:
+Domain   Wall(s)         GC(s)   GC(%)
+0        114.15          11.52   10.10
+1        112.19          20.00   17.83
+2        112.19          20.64   18.40
+3        112.21          20.20   18.01
+4        112.19          20.33   18.12
+5        112.28          19.91   17.73
+6        112.20          20.32   18.11
+7        112.87          19.75   17.49
+8        112.57          20.41   18.13
 
 GC latency profile:
-#[Mean (ms):	0.88,	 Stddev (ms):	1.67]
-#[Min (ms):	0.00,	 max (ms):	13.21]
+#[Mean (ms):    4.95,    Stddev (ms):   5.58]
+#[Min (ms):     0.00,    max (ms):      72.55]
 
-Percentile 	 Latency (ms)
-25.0000 	 0.01
-50.0000 	 0.04
-60.0000 	 0.13
-70.0000 	 0.45
-75.0000 	 0.79
-80.0000 	 1.53
-85.0000 	 2.46
-90.0000 	 3.46
-95.0000 	 4.38
-96.0000 	 5.07
-97.0000 	 5.87
-98.0000 	 6.45
-99.0000 	 7.08
-99.9000 	 11.20
-99.9900 	 13.21
-99.9990 	 13.21
-99.9999 	 13.21
-100.0000 	 13.21
+Percentile       Latency (ms)
+25.0000          0.05
+50.0000          4.66
+60.0000          5.51
+70.0000          6.38
+75.0000          6.89
+80.0000          7.54
+85.0000          8.54
+90.0000          10.56
+95.0000          14.58
+96.0000          16.27
+97.0000          18.14
+98.0000          21.10
+99.0000          26.62
+99.9000          47.19
+99.9900          66.98
+99.9990          72.55
+99.9999          72.55
+100.0000         72.55
 ```
 
-```bash
-$ olly gc-stats 'menhir -v --table sysver.mly' # Use quotes for commands with arguments
-<snip>
-Execution times:
-Wall time (s):	60.88
-CPU time (s):	60.88
-GC time (s):	7.30
-GC overhead (% of CPU time):	11.99%
+### Tracing a program
 
-GC time per domain (s):
-Domain0: 	7.30
-
-GC latency profile:
-#[Mean (ms):	0.10,	 Stddev (ms):	0.43]
-#[Min (ms):	0.00,	 max (ms):	39.16]
-
-Percentile 	 Latency (ms)
-25.0000 	 0.00
-50.0000 	 0.00
-60.0000 	 0.00
-70.0000 	 0.00
-75.0000 	 0.00
-80.0000 	 0.00
-85.0000 	 0.01
-90.0000 	 0.26
-95.0000 	 0.69
-96.0000 	 0.88
-97.0000 	 1.04
-98.0000 	 1.30
-99.0000 	 1.91
-99.9000 	 4.56
-99.9900 	 8.31
-99.9990 	 9.83
-99.9999 	 39.16
-100.0000 	 39.16
-```
-
-### trace
-
-`olly trace` will record the runtime trace log in 
-[Fuchsia trace format](https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format) 
+`olly trace` will record the runtime trace log in
+[Fuchsia trace format](https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format)
 or
 [Chrome tracing format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview)
-. Format of the trace file can be specified with the
-`--format` option. The default is Fuchsia trace format.
+. The trace format can be specified with the `--format` option, with the default being Fuchsia trace format.
 
 ```bash
 $ olly trace --format=fuchsia menhir_sysver.trace 'menhir -v --table sysver.mly' # Fuchsia trace format
@@ -121,8 +94,14 @@ Traces in either formats can be viewed in [perfetto trace viewer](https://ui.per
 
 ![image](https://user-images.githubusercontent.com/410484/175475118-b08cbf06-a939-4edb-9336-20dfd464bb1b.png)
 
+## Missed events
+
+If olly does not read a domain's ring buffer fast enough then some events will be lost, which is reported as `[ring_id=6] Lost 1584944 events`. If this occurs the results from olly *may* be inaccurate. There are several ways to fix this:
+
+1. Use `--freq` option to make olly read the ring buffer more frequently.
+2. Set `OCAMLRUNPARAM=e=20` to increase the size of the ring buffer.
+3. If events are being lost at startup, consider adding a brief sleep to the beginning of your program so olly has time to attach to it.
 
 ## Dependencies
 
-The library depends on
-[`hdr_histogram_ocaml`](https://github.com/ocaml-multicore/hdr_histogram_ocaml).
+The library depends on [`hdr_histogram_ocaml`](https://github.com/ocaml-multicore/hdr_histogram_ocaml).

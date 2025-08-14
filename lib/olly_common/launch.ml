@@ -44,7 +44,12 @@ let exec_process (argsl : string list) : subprocess =
         (Fail (Printf.sprintf "executable %s not found" executable_filename))
   in
   Unix.sleepf 0.1;
-  let cursor = Runtime_events.create_cursor (Some (dir, child_pid)) in
+  let cursor =
+    try Runtime_events.create_cursor (Some (dir, child_pid))
+    with Failure str ->
+      (* Provide some context for which directory was passed to create_cursor *)
+      failwith (str ^ " Directory: " ^ dir)
+  in
   let alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
     | 0, _ -> true
@@ -74,11 +79,11 @@ let launch_process (exec_args : exec_config) : subprocess =
   | Execute argsl -> exec_process argsl
   | Attach (dir, pid) -> attach_process dir pid
 
-let collect_events child callbacks =
+let collect_events poll_sleep child callbacks =
   (* Read from the child process *)
   while child.alive () do
     Runtime_events.read_poll child.cursor callbacks None |> ignore;
-    Unix.sleepf 0.1 (* Poll at 10Hz *)
+    if poll_sleep > 0.0 then Unix.sleepf poll_sleep
   done;
   (* Do one more poll in case there are any remaining events we've missed *)
   Runtime_events.read_poll child.cursor callbacks None |> ignore
@@ -93,6 +98,7 @@ type consumer_config = {
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
   init : unit -> unit;
   cleanup : unit -> unit;
+  poll_sleep : float;
 }
 
 let empty_config =
@@ -104,6 +110,7 @@ let empty_config =
     extra = Fun.id;
     init = (fun () -> ());
     cleanup = (fun () -> ());
+    poll_sleep = 0.1 (* Poll at 10Hz *);
   }
 
 let olly config (exec_args : exec_config) =
@@ -126,4 +133,4 @@ let olly config (exec_args : exec_config) =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events child callbacks))
+          collect_events config.poll_sleep child callbacks))
