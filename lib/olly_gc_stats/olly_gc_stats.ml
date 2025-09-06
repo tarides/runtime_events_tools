@@ -14,7 +14,7 @@ let domain_elapsed_times = Array.make number_domains 0.
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
 let domain_promoted_words = Array.make number_domains 0
-let domain_major_words = Array.make number_domains 0
+(* let domain_major_words = Array.make number_domains 0 *)
 let minor_collections = ref 0
 let major_collections = ref 0
 let forced_major_collections = ref 0
@@ -148,50 +148,52 @@ let print_percentiles json output hist =
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC allocations (in words): \n";
     let minor_words = ref 0.0 in
-    let major_words = ref 0.0 in
+    (* let major_words = ref 0.0 in *)
     let promoted_words = ref 0.0 in
     Array.iteri
       (fun i v ->
         minor_words := !minor_words +. float_of_int v;
-        major_words := !major_words +. float_of_int domain_major_words.(i);
+        (* major_words := !major_words +. float_of_int domain_major_words.(i); *)
         promoted_words :=
           !promoted_words +. float_of_int domain_promoted_words.(i))
       domain_minor_words;
     Printf.fprintf oc "Total heap:\t %.0f\n"
-      (!minor_words -. !promoted_words +. !major_words);
+      (!minor_words -. !promoted_words);
+    (* Printf.fprintf oc "Total heap:\t %.0f\n" *)
+    (*   (!minor_words -. !promoted_words +. !major_words); *)
     Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
-    Printf.fprintf oc "Major heap:\t %.0f\n" !major_words;
+    (* Printf.fprintf oc "Major heap:\t %.0f\n" !major_words; *)
     Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
       (!promoted_words /. !minor_words *. 100.0);
     Printf.fprintf oc "\n";
-    Printf.fprintf oc "Per domain stats: \n";
-    let data =
-      ref [ [ "Domain"; "Total"; "Minor"; "Promoted"; "Major"; "Promoted(%)" ] ]
-    in
+    (* Printf.fprintf oc "Per domain stats: \n"; *)
+    (* let data = *)
+    (*   ref [ [ "Domain"; "Total"; "Minor"; "Promoted"; "Major"; "Promoted(%)" ] ] *)
+    (* in *)
 
-    Array.iteri
-      (fun i (domain_major_word, (domain_minor_word, domain_promoted_word)) ->
-        if domain_major_word > 0 then
-          data :=
-            List.append !data
-              [
-                [
-                  string_of_int i;
-                  string_of_int
-                    (domain_minor_word - domain_promoted_word
-                   + domain_major_word);
-                  string_of_int domain_minor_word;
-                  string_of_int domain_promoted_word;
-                  string_of_int domain_major_word;
-                  Printf.sprintf "%.2f"
-                    (float_of_int domain_promoted_word
-                    /. float_of_int domain_minor_word
-                    *. 100.0);
-                ];
-              ])
-      (Array.combine domain_minor_words domain_promoted_words
-      |> Array.combine domain_major_words);
-    print_table oc !data;
+    (* Array.iteri *)
+    (*   (fun i (domain_major_word, (domain_minor_word, domain_promoted_word)) -> *)
+    (*     if domain_major_word > 0 then *)
+    (*       data := *)
+    (*         List.append !data *)
+    (*           [ *)
+    (*             [ *)
+    (*               string_of_int i; *)
+    (*               string_of_int *)
+    (*                 (domain_minor_word - domain_promoted_word *)
+    (*                + domain_major_word); *)
+    (*               string_of_int domain_minor_word; *)
+    (*               string_of_int domain_promoted_word; *)
+    (*               string_of_int domain_major_word; *)
+    (*               Printf.sprintf "%.2f" *)
+    (*                 (float_of_int domain_promoted_word *)
+    (*                 /. float_of_int domain_minor_word *)
+    (*                 *. 100.0); *)
+    (*             ]; *)
+    (*           ]) *)
+    (*   (Array.combine domain_minor_words domain_promoted_words *)
+    (*   |> Array.combine domain_major_words); *)
+    (* print_table oc !data; *)
     Printf.fprintf oc "Minor Gen: %i collections\n" !minor_collections;
     Printf.fprintf oc "Major Gen: %i collections %i forced collections\n"
       !major_collections !forced_major_collections;
@@ -254,10 +256,10 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
         (* Reported as bytes so we convert to words *)
         domain_minor_words.(ring_id) <-
           domain_minor_words.(ring_id) + (value / 8)
-    | Runtime_events.EV_C_MAJOR_ALLOCATED_WORDS ->
-        (* Allocations to the major heap of this Domain in words,
-          since the last major slice. *)
-        domain_major_words.(ring_id) <- domain_major_words.(ring_id) + value
+    (* | Runtime_events.EV_C_MAJOR_ALLOCATED_WORDS -> *)
+    (*     (\* Allocations to the major heap of this Domain in words, *)
+    (*       since the last major slice. *\) *)
+    (*     domain_major_words.(ring_id) <- domain_major_words.(ring_id) + value *)
     | _ -> ()
   in
 
