@@ -1,0 +1,29 @@
+(rule
+ (with-stdout-to
+  olly.txt.gen
+  (run olly --help=plain)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff olly.txt olly.txt.gen)))
+
+(rule
+ (with-stdout-to
+  trace.txt.gen
+  (run olly trace --help=plain)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff trace.txt trace.txt.gen)))
+
+(rule
+ (with-stdout-to
+  gc-stats.txt.gen
+  (run olly gc-stats --help=plain)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff gc-stats.txt gc-stats.txt.gen)))

@@ -3,9 +3,23 @@ module Ts = Runtime_events.Timestamp
 
 type ts = { mutable start_time : float; mutable end_time : float }
 
+(* Maximum number of domains that can be active concurrently.
+   Defaults to 128 on 64-bit platforms and 16 on 32-bit platforms.
+
+   This can be user configurable with OCAMLRUNPARAM=d=XXX
+*)
+let number_domains = 128
 let wall_time = { start_time = 0.; end_time = 0. }
-let domain_elapsed_times = Array.make 128 0.
-let domain_gc_times = Array.make 128 0
+let domain_elapsed_times = Array.make number_domains 0.
+let domain_gc_times = Array.make number_domains 0
+let domain_minor_words = Array.make number_domains 0
+let domain_promoted_words = Array.make number_domains 0
+
+(* let domain_major_words = Array.make number_domains 0 *)
+let minor_collections = ref 0
+let major_collections = ref 0
+let forced_major_collections = ref 0
+let compactions = ref 0
 
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
@@ -20,6 +34,22 @@ let lifecycle domain_id ts lifecycle_event _data =
   | Runtime_events.EV_DOMAIN_TERMINATE ->
       domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
   | _ -> ()
+
+let print_table oc (data : string list list) =
+  let column_widths =
+    List.fold_left
+      (fun widths row -> List.map2 max widths (List.map String.length row))
+      (List.map String.length (List.hd data))
+      (List.tl data)
+  in
+  let print_row row =
+    let formatted_row =
+      List.map2 (fun s w -> Printf.sprintf "%-*s" w s) row column_widths
+    in
+    Printf.fprintf oc "%s  \n" (String.concat "   " formatted_row)
+  in
+
+  List.iter print_row data
 
 let print_percentiles json output hist =
   let to_sec x = float_of_int x /. 1_000_000_000. in
@@ -87,13 +117,23 @@ let print_percentiles json output hist =
       (total_gc_time /. !total_cpu_time *. 100.);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
-    Printf.fprintf oc "Domain\t Wall(s)\t GC(s)\t GC(%%)\n";
+    let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
     Array.iteri
       (fun i (c, g) ->
         if c > 0. then
-          Printf.fprintf oc "%d\t %.2f\t\t %.2f\t %.2f\n" i c (to_sec g)
-            (to_sec g *. 100. /. c))
+          data :=
+            List.append !data
+              [
+                [
+                  string_of_int i;
+                  Printf.sprintf "%.2f" c;
+                  Printf.sprintf "%.2f" (to_sec g);
+                  Printf.sprintf "%.2f" (to_sec g *. 100. /. c);
+                ];
+              ])
       (Array.combine domain_elapsed_times domain_gc_times);
+
+    print_table oc !data;
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
@@ -105,9 +145,63 @@ let print_percentiles json output hist =
     Printf.fprintf oc "Percentile \t Latency (ms)\n";
     Fun.flip Array.iter percentiles (fun p ->
         Printf.fprintf oc "%.4f \t %.2f\n" p
-          (float_of_int (H.value_at_percentile hist p) |> ms)))
+          (float_of_int (H.value_at_percentile hist p) |> ms));
+    Printf.fprintf oc "\n";
+    Printf.fprintf oc "GC allocations (in words): \n";
+    let minor_words = ref 0.0 in
+    (* let major_words = ref 0.0 in *)
+    let promoted_words = ref 0.0 in
+    Array.iteri
+      (fun i v ->
+        minor_words := !minor_words +. float_of_int v;
+        (* major_words := !major_words +. float_of_int domain_major_words.(i); *)
+        promoted_words :=
+          !promoted_words +. float_of_int domain_promoted_words.(i))
+      domain_minor_words;
+    Printf.fprintf oc "Total heap:\t %.0f\n" (!minor_words -. !promoted_words);
+    (* Printf.fprintf oc "Total heap:\t %.0f\n" *)
+    (*   (!minor_words -. !promoted_words +. !major_words); *)
+    Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
+    (* Printf.fprintf oc "Major heap:\t %.0f\n" !major_words; *)
+    Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
+      (!promoted_words /. !minor_words *. 100.0);
+    Printf.fprintf oc "\n";
 
-let gc_stats poll_sleep json output exec_args =
+    (* Printf.fprintf oc "Per domain stats: \n"; *)
+    (* let data = *)
+    (*   ref [ [ "Domain"; "Total"; "Minor"; "Promoted"; "Major"; "Promoted(%)" ] ] *)
+    (* in *)
+
+    (* Array.iteri *)
+    (*   (fun i (domain_major_word, (domain_minor_word, domain_promoted_word)) -> *)
+    (*     if domain_major_word > 0 then *)
+    (*       data := *)
+    (*         List.append !data *)
+    (*           [ *)
+    (*             [ *)
+    (*               string_of_int i; *)
+    (*               string_of_int *)
+    (*                 (domain_minor_word - domain_promoted_word *)
+    (*                + domain_major_word); *)
+    (*               string_of_int domain_minor_word; *)
+    (*               string_of_int domain_promoted_word; *)
+    (*               string_of_int domain_major_word; *)
+    (*               Printf.sprintf "%.2f" *)
+    (*                 (float_of_int domain_promoted_word *)
+    (*                 /. float_of_int domain_minor_word *)
+    (*                 *. 100.0); *)
+    (*             ]; *)
+    (*           ]) *)
+    (*   (Array.combine domain_minor_words domain_promoted_words *)
+    (*   |> Array.combine domain_major_words); *)
+    (* print_table oc !data; *)
+    Printf.fprintf oc "Minor Gen: %i collections\n" !minor_collections;
+    Printf.fprintf oc "Major Gen: %i collections %i forced collections\n"
+      !major_collections !forced_major_collections;
+    Printf.fprintf oc "Compactions: %i\n" !compactions)
+
+let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
+    exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -121,6 +215,24 @@ let gc_stats poll_sleep json output exec_args =
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
+    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT && ring_id == 0 then
+      incr compactions;
+
+    if phase == Runtime_events.EV_MINOR && ring_id == 0 then
+      incr minor_collections;
+
+    (* Runtime_events.EV_MAJOR seems to correspond to any GC collection,
+       be more specific and use stop-the-world phase done at the end of
+       a major GC cycle *)
+    if phase == Runtime_events.EV_MAJOR_GC_STW && ring_id == 0 then
+      incr major_collections;
+
+    if
+      (phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
+      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR)
+      && ring_id == 0
+    then incr forced_major_collections;
+
     if is_gc_phase phase then
       match Hashtbl.find_opt current_event ring_id with
       | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
@@ -135,6 +247,23 @@ let gc_stats poll_sleep json output exec_args =
         domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
     | _ -> ()
   in
+  let runtime_counter ring_id _ts counter_type value =
+    match counter_type with
+    | Runtime_events.EV_C_MINOR_PROMOTED ->
+        (* Reported as bytes so we convert to words *)
+        domain_promoted_words.(ring_id) <-
+          domain_promoted_words.(ring_id) + (value / 8)
+    | Runtime_events.EV_C_MINOR_ALLOCATED ->
+        (* Reported as bytes so we convert to words *)
+        domain_minor_words.(ring_id) <-
+          domain_minor_words.(ring_id) + (value / 8)
+    (* | Runtime_events.EV_C_MAJOR_ALLOCATED_WORDS -> *)
+    (*     (\* Allocations to the major heap of this Domain in words, *)
+    (*       since the last major slice. *\) *)
+    (*     domain_major_words.(ring_id) <- domain_major_words.(ring_id) + value *)
+    | _ -> ()
+  in
+
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
   let open Olly_common.Launch in
@@ -145,10 +274,13 @@ let gc_stats poll_sleep json output exec_args =
            empty_config with
            runtime_begin;
            runtime_end;
+           runtime_counter;
            lifecycle;
            init;
            cleanup;
            poll_sleep;
+           runtime_events_dir;
+           runtime_events_log_wsize;
          }
          exec_args)
   with Fail msg -> `Error (false, msg)
@@ -190,11 +322,17 @@ let gc_stats_cmd =
         ( "GC time per domain",
           "Time spent by every domain performing garbage collection (major and \
            minor cycles). Domains are reported with their domain ID   (e.g. \
-           `Domain0`)" );
+           `Domain 0`)" );
       `I
         ( "GC latency profile",
           "Mean, standard deviation and percentile latency profile of GC \
            events." );
+      (* TODO Add description of new fields here. *)
+      `I
+        ( "GC allocations",
+          "GC allocation and promotion in machine words during program \
+           execution. Counts of Compactions, and Minor and Major collections."
+        );
       `Blocks help_secs;
     ]
   in
@@ -205,4 +343,4 @@ let gc_stats_cmd =
     Term.(
       ret
         (const gc_stats $ freq_option $ json_option $ output_option
-       $ exec_args 0))
+       $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 0))
