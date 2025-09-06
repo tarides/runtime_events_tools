@@ -21,7 +21,7 @@ let process_launch_failure () =
 
 let process_launch () =
   let open Olly_common in
-  let config = { Launch.log_wsize = None; dir = None } in
+  let config = { Launch.log_wsize = None; dir = Some "./" } in
   Alcotest.(check bool)
     "process should launch" true
     (try
@@ -42,7 +42,7 @@ let process_launch () =
 
 let () =
   let open Alcotest in
-  run "Runtime Events Tools"
+  run "Runtime-events-tools"
     [
       ( "process",
         [

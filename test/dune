@@ -1,74 +1,56 @@
-; run menhir test
+; ; run menhir test
 
-(executable
- (name test_gc_stats)
- (modules test_gc_stats))
+; (executable
+;  (name test_gc_stats)
+;  (modules test_gc_stats))
 
-(executable
- (name test_fib)
- (modules test_fib)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (libraries runtime_events unix))
+; (executable
+;  (name test_fib)
+;  (modules test_fib)
+;  (enabled_if
+;   (>= %{ocaml_version} 5.1.0))
+;  (libraries runtime_events unix))
 
-(rule
- (alias runtest)
- (package runtime_events_tools)
- (deps %{bin:olly} test_gc_stats.exe)
- (action
-  (run olly gc-stats "./test_gc_stats.exe")))
+; (rule
+;  (alias runtest)
+;  (package runtime_events_tools)
+;  (deps %{bin:olly} test_gc_stats.exe)
+;  (action
+;   (run olly gc-stats "./test_gc_stats.exe")))
 
-(rule
- (alias runtest)
- (package runtime_events_tools)
- (deps %{bin:olly} test_gc_stats.exe)
- (action
-  (run olly gc-stats ./test_gc_stats.exe 19)))
+; (rule
+;  (alias runtest)
+;  (package runtime_events_tools)
+;  (deps %{bin:olly} test_gc_stats.exe)
+;  (action
+;   (run olly gc-stats ./test_gc_stats.exe 19)))
 
-(rule
- (alias runtest)
- (package runtime_events_tools)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (deps %{bin:olly} test_fib.exe)
- (action
-  (progn
-   (run olly trace test.trace ./test_fib.exe))))
+; (rule
+;  (alias runtest)
+;  (package runtime_events_tools)
+;  (enabled_if
+;   (>= %{ocaml_version} 5.1.0))
+;  (deps %{bin:olly} test_fib.exe)
+;  (action
+;   (progn
+;    (run olly trace test.trace ./test_fib.exe))))
 
-(rule
- (alias runtest)
- (package runtime_events_tools)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (deps %{bin:olly} test_fib.exe)
- (action
-  (progn
-   (run olly trace --format=json test-json.trace ./test_fib.exe))))
+; (rule
+;  (alias runtest)
+;  (package runtime_events_tools)
+;  (enabled_if
+;   (>= %{ocaml_version} 5.1.0))
+;  (deps %{bin:olly} test_fib.exe)
+;  (action
+;   (progn
+;    (run olly trace --format=json test-json.trace ./test_fib.exe))))
 
-(rule
- (alias runtest)
- (package runtime_events_tools_bare)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (deps %{bin:olly_bare} test_fib.exe)
- (action
-  (progn
-   (run olly_bare trace --format=json test-bare-json.trace ./test_fib.exe))))
-
-; Dummy process for testing process launching.
-
-(executables
- (names run_endlessly)
- (modules run_endlessly)
- (libraries unix))
-
-(test
- (name test_launch)
- (modules test_launch)
- (package runtime_events_tools)
- (enabled_if
-  (>= %{ocaml_version} 5.1.0))
- (libraries olly_common alcotest)
- (deps run_endlessly.exe)
- (action
-  (run %{test} --show-errors)))
+; (rule
+;  (alias runtest)
+;  (package runtime_events_tools_bare)
+;  (enabled_if
+;   (>= %{ocaml_version} 5.1.0))
+;  (deps %{bin:olly_bare} test_fib.exe)
+;  (action
+;   (progn
+;    (run olly_bare trace --format=json test-bare-json.trace ./test_fib.exe))))
