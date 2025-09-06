@@ -126,7 +126,8 @@ let empty_config =
     cleanup = (fun () -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None (* Use default tmp directory *);
-    runtime_events_log_wsize = None; (* Use default size 16. *)
+    runtime_events_log_wsize = None;
+    (* Use default size 16. *)
   }
 
 let olly config exec_args =

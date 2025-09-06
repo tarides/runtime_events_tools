@@ -14,6 +14,7 @@ let domain_elapsed_times = Array.make number_domains 0.
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
 let domain_promoted_words = Array.make number_domains 0
+
 (* let domain_major_words = Array.make number_domains 0 *)
 let minor_collections = ref 0
 let major_collections = ref 0
@@ -157,8 +158,7 @@ let print_percentiles json output hist =
         promoted_words :=
           !promoted_words +. float_of_int domain_promoted_words.(i))
       domain_minor_words;
-    Printf.fprintf oc "Total heap:\t %.0f\n"
-      (!minor_words -. !promoted_words);
+    Printf.fprintf oc "Total heap:\t %.0f\n" (!minor_words -. !promoted_words);
     (* Printf.fprintf oc "Total heap:\t %.0f\n" *)
     (*   (!minor_words -. !promoted_words +. !major_words); *)
     Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
@@ -166,6 +166,7 @@ let print_percentiles json output hist =
     Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
       (!promoted_words /. !minor_words *. 100.0);
     Printf.fprintf oc "\n";
+
     (* Printf.fprintf oc "Per domain stats: \n"; *)
     (* let data = *)
     (*   ref [ [ "Domain"; "Total"; "Minor"; "Promoted"; "Major"; "Promoted(%)" ] ] *)
