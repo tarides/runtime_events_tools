@@ -44,6 +44,22 @@ let freq_option =
     & opt float 0.1 (* Poll at 10Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
 
+let runtime_events_dir =
+  let doc =
+    "Sets the directory where the .events files containing the runtime event \
+     tracing system’s ring buffers will be located.\n\n\
+    \               If not specified a temporary directory will be used."
+  in
+  Arg.(value & opt (some string) None & info [ "d"; "dir" ] ~docv:"dir" ~doc)
+
+let runtime_events_log_wsize =
+  let doc =
+    "Size of the per-domain runtime events ring buffers in log powers of two \
+     words. Defaults to 16."
+  in
+  Arg.(
+    value & opt (some int) None & info [ "log-wsize" ] ~docv:"log-wsize" ~doc)
+
 let exec_args p =
   let exec_and_args, ea_docv =
     let doc = "Executable and arguments to trace." in

@@ -1,0 +1,208 @@
+Display help when called without subcommands
+
+  $ olly --help=plain
+  NAME
+         olly - An observability tool for OCaml programs
+  
+  SYNOPSIS
+         olly COMMAND …
+  
+  COMMANDS
+         gc-stats [OPTION]… [EXECUTABLE]…
+             Report the GC latency profile and stats.
+  
+         help [--man-format=FMT] [OPTION]… [TOPIC]
+             Display help about olly and olly commands.
+  
+         trace [OPTION]… TRACEFILE [EXECUTABLE]…
+             Save the runtime trace to file.
+  
+  COMMON OPTIONS
+         --help[=FMT] (default=auto)
+             Show this help in format FMT. The value FMT must be one of auto,
+             pager, groff or plain. With auto, the format is pager or plain
+             whenever the TERM env var is dumb or undefined.
+  
+  EXIT STATUS
+         olly exits with:
+  
+         0   on success.
+  
+         123 on indiscriminate errors reported on standard error.
+  
+         124 on command line parsing errors.
+  
+         125 on unexpected internal errors (bugs).
+  
+Display help for trace 
+
+  $ olly trace --help=plain
+  NAME
+         olly-trace - Save the runtime trace to file.
+  
+  SYNOPSIS
+         olly trace [OPTION]… TRACEFILE [EXECUTABLE]…
+  
+  DESCRIPTION
+         Save the runtime trace to file.
+  
+  ARGUMENTS
+         EXECUTABLE
+             Executable and arguments to trace.
+  
+         TRACEFILE (required)
+             Target trace file name.
+  
+  OPTIONS
+         -a [directory:]pid, --attach=[directory:]pid
+             Attach to the process with the given PID. The directory containing
+             the PID.events file may be specified. This option cannot be
+             combined with EXECUTABLE.
+  
+         -c, --emit-counters
+             Emit runtime counter events.
+  
+         -d dir, --dir=dir
+             Sets the directory where the .events files containing the runtime
+             event tracing system’s ring buffers will be located. If not
+             specified a temporary directory will be used.
+  
+         -f format, --format=format (absent=fuchsia)
+             Format of the target trace, options are: "fuchsia" (Perfetto),
+             "json" (Chrome Trace Format).
+  
+         --freq=freq (absent=0.1)
+             Set the interval that olly sleeps in seconds, after performing a
+             [Runtime_events.read_poll]. Fractions of seconds are supported. A
+             value of 0.0 will skip sleeping altogether.
+  
+         --log-wsize=log-wsize
+             Size of the per-domain runtime events ring buffers in log powers
+             of two words. Defaults to 16.
+  
+  COMMON OPTIONS
+         These options are common to all commands.
+  
+         --help[=FMT] (default=auto)
+             Show this help in format FMT. The value FMT must be one of auto,
+             pager, groff or plain. With auto, the format is pager or plain
+             whenever the TERM env var is dumb or undefined.
+  
+  MORE HELP
+         Use olly COMMAND --help for help on a single command.
+  EXIT STATUS
+         olly trace exits with:
+  
+         0   on success.
+  
+         123 on indiscriminate errors reported on standard error.
+  
+         124 on command line parsing errors.
+  
+         125 on unexpected internal errors (bugs).
+  
+  BUGS
+         Check bug reports at
+         http://github.com/tarides/runtime_events_tools/issues.
+  
+  SEE ALSO
+         olly(1)
+  
+
+Display help for gc-stats 
+
+  $ olly gc-stats --help=plain
+  NAME
+         olly-gc-stats - Report the GC latency profile and stats.
+  
+  SYNOPSIS
+         olly gc-stats [OPTION]… [EXECUTABLE]…
+  
+  DESCRIPTION
+         Report the GC latency profile.
+  
+         Wall time
+             Real execution time of the program
+  
+         CPU time
+             Total CPU time across all domains
+  
+         GC time
+             Total time spent by the program performing garbage collection
+             (major and minor)
+  
+         GC overhead
+             Percentage of time taken up by GC against the total execution time
+  
+         GC time per domain
+             Time spent by every domain performing garbage collection (major
+             and minor cycles). Domains are reported with their domain ID (e.g.
+             `Domain 0`)
+  
+         GC latency profile
+             Mean, standard deviation and percentile latency profile of GC
+             events.
+  
+         GC allocations
+             GC allocation and promotion in machine words during program
+             execution. Counts of Compactions, and Minor and Major collections.
+  
+  ARGUMENTS
+         EXECUTABLE
+             Executable and arguments to trace.
+  
+  OPTIONS
+         -a [directory:]pid, --attach=[directory:]pid
+             Attach to the process with the given PID. The directory containing
+             the PID.events file may be specified. This option cannot be
+             combined with EXECUTABLE.
+  
+         -d dir, --dir=dir
+             Sets the directory where the .events files containing the runtime
+             event tracing system’s ring buffers will be located. If not
+             specified a temporary directory will be used.
+  
+         --freq=freq (absent=0.1)
+             Set the interval that olly sleeps in seconds, after performing a
+             [Runtime_events.read_poll]. Fractions of seconds are supported. A
+             value of 0.0 will skip sleeping altogether.
+  
+         --json
+             Print the output in json instead of human-readable format.
+  
+         --log-wsize=log-wsize
+             Size of the per-domain runtime events ring buffers in log powers
+             of two words. Defaults to 16.
+  
+         -o output, --output=output
+             Redirect the output of `olly` to specified file. The output of the
+             command is not redirected.
+  
+  COMMON OPTIONS
+         These options are common to all commands.
+  
+         --help[=FMT] (default=auto)
+             Show this help in format FMT. The value FMT must be one of auto,
+             pager, groff or plain. With auto, the format is pager or plain
+             whenever the TERM env var is dumb or undefined.
+  
+  MORE HELP
+         Use olly COMMAND --help for help on a single command.
+  EXIT STATUS
+         olly gc-stats exits with:
+  
+         0   on success.
+  
+         123 on indiscriminate errors reported on standard error.
+  
+         124 on command line parsing errors.
+  
+         125 on unexpected internal errors (bugs).
+  
+  BUGS
+         Check bug reports at
+         http://github.com/tarides/runtime_events_tools/issues.
+  
+  SEE ALSO
+         olly(1)
+  

@@ -2,3 +2,19 @@
  (name olly_gc_stats)
  (optional)
  (libraries olly_common hdr_histogram))
+
+(rule
+ (deps olly_gc_stats.5.0.ml)
+ (target olly_gc_impl.ml)
+ (enabled_if
+  (< %{ocaml_version} 5.3))
+ (action
+  (copy %{deps} %{target})))
+
+(rule
+ (deps olly_gc_stats.5.3.ml)
+ (target olly_gc_impl.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.3))
+ (action
+  (copy %{deps} %{target})))
