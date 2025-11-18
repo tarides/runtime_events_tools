@@ -1,7 +1,6 @@
-(lang dune 3.16)
+(lang dune 3.18)
 
 (name runtime_events_tools)
-(version "0.5.1")
 (generate_opam_files true)
 
 (source
@@ -15,6 +14,7 @@
  (name runtime_events_tools)
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml")
+ (maintenance_intent "(latest)")
  (depends
   (ocaml (>= "5.0.0~"))
   hdr_histogram
@@ -29,6 +29,7 @@
  (name runtime_events_tools_bare)
  (synopsis "Tools for the runtime events tracing system in OCaml")
  (description "Various tools for the runtime events tracing system in OCaml: minimal dependencies")
+ (maintenance_intent "(latest)")
  (depends
   (ocaml (>= "5.0.0~"))
-  (cmdliner (>= 1.1.0))))
+  (cmdliner (and (>= 1.1.0) (< 2.0)))))

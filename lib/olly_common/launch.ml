@@ -8,19 +8,24 @@ type subprocess = {
   pid : int;
 }
 
+type runtime_events_config = { log_wsize : int option; dir : string option }
 type exec_config = Attach of string * int | Execute of string list
 
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
-let exec_process (argsl : string list) : subprocess =
+let exec_process (config : runtime_events_config) (argsl : string list) :
+    subprocess =
   if not (List.length argsl > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
   let executable_filename = List.hd argsl in
 
-  (* TODO Set the temp directory. We should make this configurable. *)
-  let dir = Filename.get_temp_dir_name () |> Unix.realpath in
+  let dir =
+    match config.dir with
+    | None -> Filename.get_temp_dir_name () |> Unix.realpath
+    | Some path -> Unix.realpath path
+  in
   if not @@ Sys.file_exists dir then
     raise (Fail (Printf.sprintf "directory %s does not exist" dir));
   if not @@ Sys.is_directory dir then
@@ -29,9 +34,17 @@ let exec_process (argsl : string list) : subprocess =
   let env =
     Array.append
       [|
+        (* See https://ocaml.org/manual/5.3/runtime-tracing.html#s:runtime-tracing-environment-variables *)
         "OCAML_RUNTIME_EVENTS_START=1";
         "OCAML_RUNTIME_EVENTS_DIR=" ^ dir;
         "OCAML_RUNTIME_EVENTS_PRESERVE=1";
+        ((* See https://ocaml.org/manual/5.3/runtime.html#s:ocamlrun-options *)
+         let log_wsize =
+           match config.log_wsize with
+           | Some i -> "e=" ^ Int.to_string i
+           | None -> ""
+         in
+         "OCAMLRUNPARAM=" ^ log_wsize);
       |]
       (Unix.environment ())
   in
@@ -65,7 +78,12 @@ let exec_process (argsl : string list) : subprocess =
   { alive; cursor; close; pid = child_pid }
 
 let attach_process (dir : string) (pid : int) : subprocess =
-  let cursor = Runtime_events.create_cursor (Some (dir, pid)) in
+  let cursor =
+    try Runtime_events.create_cursor (Some (dir, pid))
+    with Failure str ->
+      (* Provide some context for which directory was passed to create_cursor *)
+      failwith (str ^ " Directory: " ^ dir)
+  in
   let alive () =
     try
       Unix.kill pid 0;
@@ -74,9 +92,9 @@ let attach_process (dir : string) (pid : int) : subprocess =
   and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
-let launch_process (exec_args : exec_config) : subprocess =
+let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
-  | Execute argsl -> exec_process argsl
+  | Execute argsl -> exec_process config argsl
   | Attach (dir, pid) -> attach_process dir pid
 
 let collect_events poll_sleep child callbacks =
@@ -99,6 +117,8 @@ type consumer_config = {
   init : unit -> unit;
   cleanup : unit -> unit;
   poll_sleep : float;
+  runtime_events_dir : string option;
+  runtime_events_log_wsize : int option;
 }
 
 let empty_config =
@@ -111,12 +131,22 @@ let empty_config =
     init = (fun () -> ());
     cleanup = (fun () -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
+    runtime_events_dir = None;
+    (* Use default tmp directory *)
+    runtime_events_log_wsize = None;
+    (* Use default size 16. *)
   }
 
 let olly config (exec_args : exec_config) =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
-      let child = launch_process exec_args in
+      let runtime_config =
+        {
+          dir = config.runtime_events_dir;
+          log_wsize = config.runtime_events_log_wsize;
+        }
+      in
+      let child = launch_process runtime_config exec_args in
       Fun.protect ~finally:child.close (fun () ->
           let callbacks =
             let {

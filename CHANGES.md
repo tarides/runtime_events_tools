@@ -1,4 +1,5 @@
 ### Unreleased
+* Add option to specify runtime events dir and log size. (#66 @tmcgilchrist)
 
 ### 0.5.3
 * Use trace instead of tracing (#57 #59, @patricoferris @tmcgilchrist)

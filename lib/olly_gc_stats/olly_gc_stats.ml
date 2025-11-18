@@ -107,7 +107,7 @@ let print_percentiles json output hist =
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
-let gc_stats poll_sleep json output exec_args =
+let gc_stats poll_sleep json output runtime_events_dir exec_args =
   let current_event = Hashtbl.create 13 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
@@ -149,6 +149,7 @@ let gc_stats poll_sleep json output exec_args =
            init;
            cleanup;
            poll_sleep;
+           runtime_events_dir;
          }
          exec_args)
   with Fail msg -> `Error (false, msg)
@@ -205,4 +206,4 @@ let gc_stats_cmd =
     Term.(
       ret
         (const gc_stats $ freq_option $ json_option $ output_option
-       $ exec_args 0))
+       $ runtime_events_dir $ exec_args 0))
