@@ -9,7 +9,7 @@ let lost_events ring_id num =
 
 let print_warning_if_lost_events = fun () ->
   if !lost_event_count <> 0 then
-  Printf.eprintf "\nWarning: Summary may be inaccurate since some runtime events were lost before they could be read.\nRefer to 'Missed events' section in repo README\n\n%!"
+  Printf.eprintf "\nWarning: Results may be inaccurate since some runtime events were lost before they could be read.\nRefer to 'Missed events' section in repo README\n\n%!"
 
 type subprocess = {
   alive : unit -> bool;
