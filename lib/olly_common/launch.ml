@@ -79,7 +79,6 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
     | p, _ when p = child_pid -> false
     | _, _ -> assert false
   and close () =
-    print_warning_if_lost_events ();
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
        the child process not to remove them *)
@@ -101,7 +100,6 @@ let attach_process (dir : string) (pid : int) : subprocess =
       true
     with Unix.Unix_error (Unix.ESRCH, _, _) -> false
   and close () =
-    print_warning_if_lost_events ();
     Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
@@ -151,8 +149,9 @@ let empty_config =
   }
 
 let olly config (exec_args : exec_config) =
+  let cleanup () = config.cleanup (); print_warning_if_lost_events () in
   config.init ();
-  Fun.protect ~finally:config.cleanup (fun () ->
+  Fun.protect ~finally:cleanup (fun () ->
       let runtime_config =
         {
           dir = config.runtime_events_dir;
