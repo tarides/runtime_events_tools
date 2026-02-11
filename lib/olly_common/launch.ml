@@ -1,15 +1,19 @@
 let lost_event_count = ref 0
-
-let update_lost_event_count num =
-  lost_event_count := !lost_event_count + num
+let update_lost_event_count num = lost_event_count := !lost_event_count + num
 
 let lost_events ring_id num =
   update_lost_event_count num;
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
-let print_warning_if_lost_events = fun () ->
+let print_warning_if_lost_events =
+ fun () ->
   if !lost_event_count <> 0 then
-  Printf.eprintf "\nWarning: Results may be inaccurate since some runtime events were lost before they could be read.\nRefer to 'Missed events' section in repo README\n\n%!"
+    Printf.eprintf
+      "\n\
+       Warning: Results may be inaccurate since some runtime events were lost \
+       before they could be read.\n\
+       Refer to 'Missed events' section in repo README\n\n\
+       %!"
 
 type subprocess = {
   alive : unit -> bool;
@@ -99,8 +103,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
       Unix.kill pid 0;
       true
     with Unix.Unix_error (Unix.ESRCH, _, _) -> false
-  and close () =
-    Runtime_events.free_cursor cursor in
+  and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
 let launch_process config (exec_args : exec_config) : subprocess =
@@ -149,7 +152,10 @@ let empty_config =
   }
 
 let olly config (exec_args : exec_config) =
-  let cleanup () = config.cleanup (); print_warning_if_lost_events () in
+  let cleanup () =
+    config.cleanup ();
+    print_warning_if_lost_events ()
+  in
   config.init ();
   Fun.protect ~finally:cleanup (fun () ->
       let runtime_config =
