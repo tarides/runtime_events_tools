@@ -8,7 +8,7 @@ module Trace = Trace_fuchsia.Writer
 type trace = {
   doms : Trace.Thread_ref.t array;
   buf : Trace_fuchsia.Buf_chain.t;
-  subscriber : Trace_fuchsia.Subscriber.t;
+  collector : Trace_fuchsia.Collector_fuchsia.t;
   exporter : Trace_fuchsia.Exporter.t;
 }
 
@@ -22,22 +22,22 @@ let create ~filename =
   let buf = Trace_fuchsia.Buf_chain.create ~sharded:true ~buf_pool () in
   let oc = Out_channel.open_bin filename in
   let exporter = Trace_fuchsia.Exporter.of_out_channel ~close_channel:true oc in
-  let subscriber =
-    Trace_fuchsia.Subscriber.create ~buf_pool ~pid:0 ~exporter ()
+  let collector =
+    Trace_fuchsia.Collector_fuchsia.create ~buf_pool ~pid:0 ~exporter ()
   in
   (* Adds the headers to output *)
-  Trace_fuchsia.Subscriber.Callbacks.on_init subscriber ~time_ns:0L;
+  Trace_fuchsia.Collector_fuchsia.callbacks.init collector;
   let doms =
     let max_doms = 128 in
     Array.init max_doms (fun i ->
         (* Use a different pid for each domain *)
         Trace.Thread_ref.ref (i + 1))
   in
-  { doms; buf; subscriber; exporter }
+  { doms; buf; collector; exporter }
 
 let close trace =
   flush trace;
-  Trace_fuchsia.Subscriber.close trace.subscriber
+  Trace_fuchsia.Collector_fuchsia.close trace.collector
 
 let emit trace evt =
   let open Event in
