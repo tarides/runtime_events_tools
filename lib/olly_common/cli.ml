@@ -15,25 +15,6 @@ let help_secs =
 
 let sdocs = Manpage.s_common_options
 
-let help man_format cmds topic =
-  match topic with
-  | None -> `Help (`Pager, None) (* help about the program. *)
-  | Some topic -> (
-      let topics = "topics" :: cmds in
-      let conv = Cmdliner.Arg.enum (List.rev_map (fun s -> (s, s)) topics) in
-      let parse = Cmdliner.Arg.Conv.parser conv in
-      match parse topic with
-      | Error e -> `Error (false, e)
-      | Ok t when t = "topics" ->
-          List.iter print_endline topics;
-          `Ok ()
-      | Ok t when List.mem t cmds -> `Help (man_format, Some t)
-      | Ok _t ->
-          let page =
-            ((topic, 7, "", "", ""), [ `S topic; `P "Say something" ])
-          in
-          `Ok (Manpage.print man_format Format.std_formatter page))
-
 let runtime_events_dir =
   let doc =
     "Sets the directory where the .events files containing the runtime event \
@@ -127,28 +108,10 @@ let exec_args p =
   Term.(term_result' ~usage:true (const combine $ attach_opt $ exec_and_args))
 
 let main name commands =
-  let help_cmd =
-    let topic =
-      let doc = "The topic to get help on. $(b,topics) lists the topics." in
-      Arg.(value & pos 0 (some string) None & info [] ~docv:"TOPIC" ~doc)
-    in
-    let doc = "Display help about olly and olly commands." in
-    let man =
-      [
-        `S Manpage.s_description;
-        `P "Prints help about olly commands and other subjects…";
-        `Blocks help_secs;
-      ]
-    in
-    let info = Cmd.info "help" ~doc ~man in
-    Cmd.v info
-      Term.(ret (const help $ Arg.man_format $ Term.choice_names $ topic))
-  in
-
   let main_cmd =
     let doc = "An observability tool for OCaml programs" in
     let info = Cmd.info name ~doc ~sdocs in
-    Cmd.group info (commands @ [ help_cmd ])
+    Cmd.group info commands
   in
 
   exit (Cmd.eval main_cmd)
