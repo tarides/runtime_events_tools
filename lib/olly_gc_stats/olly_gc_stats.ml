@@ -77,7 +77,9 @@ let print_percentiles json output hist =
     in
     Printf.fprintf oc
       {|{"mean_latency": %f, "max_latency": %f, "max_rss_kb": %d, "distr_latency": {%s}}|}
-      mean_latency max_latency (Olly_common.Max_rss.max_rss_kb rss_collector) distribs
+      mean_latency max_latency
+      (Olly_common.Max_rss.max_rss_kb rss_collector)
+      distribs
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
@@ -86,7 +88,8 @@ let print_percentiles json output hist =
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
       (total_gc_time /. !total_cpu_time *. 100.);
-    Printf.fprintf oc "Max RSS (kB):\t%d\n" (Olly_common.Max_rss.max_rss_kb rss_collector);
+    Printf.fprintf oc "Max RSS (kB):\t%d\n"
+      (Olly_common.Max_rss.max_rss_kb rss_collector);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     Printf.fprintf oc "Domain\t Wall(s)\t GC(s)\t GC(%%)\n";
@@ -202,8 +205,8 @@ let gc_stats_cmd =
            events." );
       `I
         ( "Max RSS",
-          "Peak resident set size (in kB) of the child process, sampled \
-           during execution." );
+          "Peak resident set size (in kB) of the child process, sampled during \
+           execution." );
       `Blocks help_secs;
     ]
   in

@@ -166,4 +166,5 @@ let olly config (exec_args : exec_config) =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep ~on_poll:config.on_poll child callbacks))
+          collect_events config.poll_sleep ~on_poll:config.on_poll child
+            callbacks))
