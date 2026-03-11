@@ -139,6 +139,7 @@ let gc_stats poll_sleep json output runtime_events_dir exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
+  let on_poll = Olly_common.Max_rss.sample rss_collector in
   let open Olly_common.Launch in
   try
     `Ok
@@ -150,7 +151,7 @@ let gc_stats poll_sleep json output runtime_events_dir exec_args =
            lifecycle;
            init;
            cleanup;
-           on_poll = Olly_common.Max_rss.sample rss_collector;
+           on_poll;
            poll_sleep;
            runtime_events_dir;
          }
