@@ -97,9 +97,10 @@ let launch_process config (exec_args : exec_config) : subprocess =
   | Execute argsl -> exec_process config argsl
   | Attach (dir, pid) -> attach_process dir pid
 
-let collect_events poll_sleep child callbacks =
+let collect_events poll_sleep ~on_poll child callbacks =
   (* Read from the child process *)
   while child.alive () do
+    on_poll child.pid;
     Runtime_events.read_poll child.cursor callbacks None |> ignore;
     if poll_sleep > 0.0 then Unix.sleepf poll_sleep
   done;
@@ -116,6 +117,7 @@ type consumer_config = {
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
   init : unit -> unit;
   cleanup : unit -> unit;
+  on_poll : int -> unit;
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
@@ -130,6 +132,7 @@ let empty_config =
     extra = Fun.id;
     init = (fun () -> ());
     cleanup = (fun () -> ());
+    on_poll = (fun _ -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None;
     (* Use default tmp directory *)
@@ -163,4 +166,5 @@ let olly config (exec_args : exec_config) =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep child callbacks))
+          collect_events config.poll_sleep ~on_poll:config.on_poll child
+            callbacks))

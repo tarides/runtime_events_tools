@@ -6,6 +6,7 @@ type ts = { mutable start_time : float; mutable end_time : float }
 let wall_time = { start_time = 0.; end_time = 0. }
 let domain_elapsed_times = Array.make 128 0.
 let domain_gc_times = Array.make 128 0
+let rss_collector = Olly_common.Max_rss.create ()
 
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
@@ -75,8 +76,10 @@ let print_percentiles json output hist =
       |> String.concat ","
     in
     Printf.fprintf oc
-      {|{"mean_latency": %f, "max_latency": %f, "distr_latency": {%s}}|}
-      mean_latency max_latency distribs
+      {|{"mean_latency": %f, "max_latency": %f, "max_rss_kb": %d, "distr_latency": {%s}}|}
+      mean_latency max_latency
+      (Olly_common.Max_rss.max_rss_kb rss_collector)
+      distribs
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
@@ -85,6 +88,8 @@ let print_percentiles json output hist =
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
       (total_gc_time /. !total_cpu_time *. 100.);
+    Printf.fprintf oc "Max RSS (kB):\t%d\n"
+      (Olly_common.Max_rss.max_rss_kb rss_collector);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     Printf.fprintf oc "Domain\t Wall(s)\t GC(s)\t GC(%%)\n";
@@ -137,6 +142,7 @@ let gc_stats poll_sleep json output runtime_events_dir exec_args =
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
+  let on_poll = Olly_common.Max_rss.sample rss_collector in
   let open Olly_common.Launch in
   try
     `Ok
@@ -148,6 +154,7 @@ let gc_stats poll_sleep json output runtime_events_dir exec_args =
            lifecycle;
            init;
            cleanup;
+           on_poll;
            poll_sleep;
            runtime_events_dir;
          }
@@ -196,6 +203,10 @@ let gc_stats_cmd =
         ( "GC latency profile",
           "Mean, standard deviation and percentile latency profile of GC \
            events." );
+      `I
+        ( "Max RSS",
+          "Peak resident set size (in kB) of the child process, sampled during \
+           execution." );
       `Blocks help_secs;
     ]
   in
