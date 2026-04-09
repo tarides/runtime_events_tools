@@ -32,21 +32,24 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
     raise (Fail (Printf.sprintf "file %s is not a directory" dir));
 
   let env =
-    Array.append
-      [|
-        (* See https://ocaml.org/manual/5.3/runtime-tracing.html#s:runtime-tracing-environment-variables *)
-        "OCAML_RUNTIME_EVENTS_START=1";
-        "OCAML_RUNTIME_EVENTS_DIR=" ^ dir;
-        "OCAML_RUNTIME_EVENTS_PRESERVE=1";
-        ((* See https://ocaml.org/manual/5.3/runtime.html#s:ocamlrun-options *)
-         let log_wsize =
-           match config.log_wsize with
-           | Some i -> "e=" ^ Int.to_string i
-           | None -> ""
-         in
-         "OCAMLRUNPARAM=" ^ log_wsize);
-      |]
-      (Unix.environment ())
+    Array.concat
+      [
+        [|
+          (* See https://ocaml.org/manual/5.3/runtime-tracing.html#s:runtime-tracing-environment-variables *)
+          "OCAML_RUNTIME_EVENTS_START=1";
+          "OCAML_RUNTIME_EVENTS_DIR=" ^ dir;
+          "OCAML_RUNTIME_EVENTS_PRESERVE=1";
+        |];
+        (* See https://ocaml.org/manual/5.3/runtime.html#s:ocamlrun-options *)
+        (match config.log_wsize with
+        | None -> [||]
+        | Some i -> (
+            let event_log = "e=" ^ Int.to_string i in
+            match Sys.getenv_opt "OCAMLRUNPARAM" with
+            | None -> [| "OCAMLRUNPARAM=" ^ event_log |]
+            | Some params -> [| "OCAMLRUNPARAM=" ^ params ^ "," ^ event_log |]));
+        Unix.environment ();
+      ]
   in
   let child_pid =
     try
