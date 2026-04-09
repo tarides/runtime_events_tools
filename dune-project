@@ -2,6 +2,7 @@
 
 (name runtime_events_tools)
 (generate_opam_files true)
+(cram enable)
 
 (source
  (github tarides/runtime_events_tools))

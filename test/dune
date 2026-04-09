@@ -28,6 +28,13 @@
 (rule
  (alias runtest)
  (package runtime_events_tools)
+ (deps %{bin:olly} test_gc_stats.exe)
+ (action
+  (run olly latency "./test_gc_stats.exe")))
+
+(rule
+ (alias runtest)
+ (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
  (deps %{bin:olly} test_fib.exe)
