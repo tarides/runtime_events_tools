@@ -31,6 +31,23 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
   if not @@ Sys.is_directory dir then
     raise (Fail (Printf.sprintf "file %s is not a directory" dir));
 
+  let overridden_vars =
+    "OCAML_RUNTIME_EVENTS_START" :: "OCAML_RUNTIME_EVENTS_DIR"
+    :: "OCAML_RUNTIME_EVENTS_PRESERVE"
+    ::
+    (match config.log_wsize with
+    | None -> []
+    | Some _ -> [ "OCAMLRUNPARAM" ])
+  in
+  let base_env =
+    Unix.environment () |> Array.to_seq
+    |> Seq.filter (fun entry ->
+        not
+          (List.exists
+             (fun var -> String.starts_with ~prefix:(var ^ "=") entry)
+             overridden_vars))
+    |> Array.of_seq
+  in
   let env =
     Array.concat
       [
@@ -48,7 +65,7 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
             match Sys.getenv_opt "OCAMLRUNPARAM" with
             | None -> [| "OCAMLRUNPARAM=" ^ event_log |]
             | Some params -> [| "OCAMLRUNPARAM=" ^ params ^ "," ^ event_log |]));
-        Unix.environment ();
+        base_env;
       ]
   in
   let child_pid =
