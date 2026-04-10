@@ -1,2 +1,3 @@
 (cram
+ (package runtime_events_tools)
  (deps %{bin:olly}))
