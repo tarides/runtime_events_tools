@@ -1,5 +1,10 @@
-### Unreleased
-* Add option to specify runtime events dir and log size. (#66 @tmcgilchrist)
+### 0.5.3
+* Reinstate olly latency command. (#86, @tmcgilchrist)
+* Avoid overriding the user's OCAMLRUNPARAM settings. (#83, @gasche)
+* Remove help subcommand, as it relies on cmdliner internals. (#81, @theAlexes)
+* Fix cmdliner 2.0 compatibility. (#80, @krfantasy)
+* Log path when create_cursor raises an exception. (#66, @tmcgilchrist)
+* Add option to specify runtime events dir and log size. (#66, @tmcgilchrist)
 
 ### 0.5.3
 * Use trace instead of tracing (#57 #59, @patricoferris @tmcgilchrist)
