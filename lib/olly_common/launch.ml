@@ -91,9 +91,15 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
   and close () =
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
-       the child process not to remove them *)
-    let ring_file = Filename.concat dir (string_of_int child_pid ^ ".events") in
-    Unix.unlink ring_file
+       the child process not to remove them. However, if the user
+       explicitly set OCAML_RUNTIME_EVENTS_PRESERVE=1 we honour
+       their intent and leave the file in place. *)
+    if Sys.getenv_opt "OCAML_RUNTIME_EVENTS_PRESERVE" <> Some "1" then begin
+      let ring_file =
+        Filename.concat dir (string_of_int child_pid ^ ".events")
+      in
+      Unix.unlink ring_file
+    end
   in
   { alive; cursor; close; pid = child_pid }
 
