@@ -88,6 +88,7 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
     | 0, _ -> true
     | p, _ when p = child_pid -> false
     | _, _ -> assert false
+    | exception Unix.Unix_error (Unix.EINTR, _, _) -> true
   and close () =
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
@@ -123,14 +124,25 @@ let launch_process config (exec_args : exec_config) : subprocess =
   | Execute argsl -> exec_process config argsl
   | Attach (dir, pid) -> attach_process dir pid
 
+let interrupted = Atomic.make false
+
 let collect_events poll_sleep child callbacks =
-  (* Read from the child process *)
-  while child.alive () do
-    Runtime_events.read_poll child.cursor callbacks None |> ignore;
-    if poll_sleep > 0.0 then Unix.sleepf poll_sleep
-  done;
-  (* Do one more poll in case there are any remaining events we've missed *)
-  Runtime_events.read_poll child.cursor callbacks None |> ignore
+  let old_handler =
+    Sys.signal Sys.sigint
+      (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
+  in
+  Fun.protect
+    ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
+    (fun () ->
+      (* Read from the child process *)
+      while child.alive () && not (Atomic.get interrupted) do
+        Runtime_events.read_poll child.cursor callbacks None |> ignore;
+        if poll_sleep > 0.0 then
+          try Unix.sleepf poll_sleep
+          with Unix.Unix_error (Unix.EINTR, _, _) -> ()
+      done;
+      (* Do one more poll in case there are any remaining events we've missed *)
+      Runtime_events.read_poll child.cursor callbacks None |> ignore)
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
