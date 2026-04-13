@@ -4,8 +4,8 @@ module Ts = Runtime_events.Timestamp
 type ts = { mutable start_time : float; mutable end_time : float }
 
 let wall_time = { start_time = 0.; end_time = 0. }
-let domain_elapsed_times = Array.make 128 0.
-let domain_gc_times = Array.make 128 0
+let domain_elapsed_times = Array.make Olly_common.Launch.max_domains 0.
+let domain_gc_times = Array.make Olly_common.Launch.max_domains 0
 
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
@@ -165,7 +165,10 @@ let print_latency_only json output hist =
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
 let latency poll_sleep json output runtime_events_dir exec_args =
-  let current_event = Hashtbl.create 13 in
+  let max_domains = Olly_common.Launch.max_domains in
+  let current_active = Array.make max_domains false in
+  let current_phase = Array.make max_domains Runtime_events.EV_MAJOR in
+  let current_ts = Array.make max_domains 0 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
       ~significant_figures:3
@@ -178,18 +181,18 @@ let latency poll_sleep json output runtime_events_dir exec_args =
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
-    if is_gc_phase phase then
-      match Hashtbl.find_opt current_event ring_id with
-      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-      | _ -> ()
+    if is_gc_phase phase && not current_active.(ring_id) then begin
+      current_active.(ring_id) <- true;
+      current_phase.(ring_id) <- phase;
+      current_ts.(ring_id) <- Int64.to_int (Ts.to_int64 ts)
+    end
   in
   let runtime_end ring_id ts phase =
-    match Hashtbl.find_opt current_event ring_id with
-    | Some (saved_phase, saved_ts) when saved_phase = phase ->
-        Hashtbl.remove current_event ring_id;
-        let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        assert (H.record_value hist latency)
-    | _ -> ()
+    if current_active.(ring_id) && current_phase.(ring_id) = phase then begin
+      current_active.(ring_id) <- false;
+      let latency = Int64.to_int (Ts.to_int64 ts) - current_ts.(ring_id) in
+      assert (H.record_value hist latency)
+    end
   in
   let init = Fun.id in
   let cleanup () = print_latency_only json output hist in
@@ -210,7 +213,10 @@ let latency poll_sleep json output runtime_events_dir exec_args =
   with Fail msg -> `Error (false, msg)
 
 let gc_stats poll_sleep json output runtime_events_dir exec_args =
-  let current_event = Hashtbl.create 13 in
+  let max_domains = Olly_common.Launch.max_domains in
+  let current_active = Array.make max_domains false in
+  let current_phase = Array.make max_domains Runtime_events.EV_MAJOR in
+  let current_ts = Array.make max_domains 0 in
   let hist =
     H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
       ~significant_figures:3
@@ -223,19 +229,19 @@ let gc_stats poll_sleep json output runtime_events_dir exec_args =
     | _ -> false
   in
   let runtime_begin ring_id ts phase =
-    if is_gc_phase phase then
-      match Hashtbl.find_opt current_event ring_id with
-      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-      | _ -> ()
+    if is_gc_phase phase && not current_active.(ring_id) then begin
+      current_active.(ring_id) <- true;
+      current_phase.(ring_id) <- phase;
+      current_ts.(ring_id) <- Int64.to_int (Ts.to_int64 ts)
+    end
   in
   let runtime_end ring_id ts phase =
-    match Hashtbl.find_opt current_event ring_id with
-    | Some (saved_phase, saved_ts) when saved_phase = phase ->
-        Hashtbl.remove current_event ring_id;
-        let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        assert (H.record_value hist latency);
-        domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
-    | _ -> ()
+    if current_active.(ring_id) && current_phase.(ring_id) = phase then begin
+      current_active.(ring_id) <- false;
+      let latency = Int64.to_int (Ts.to_int64 ts) - current_ts.(ring_id) in
+      assert (H.record_value hist latency);
+      domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
+    end
   in
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in

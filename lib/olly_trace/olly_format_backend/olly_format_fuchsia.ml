@@ -28,7 +28,8 @@ let create ~filename =
   (* Adds the headers to output *)
   Trace_fuchsia.Collector_fuchsia.callbacks.init collector;
   let doms =
-    let max_doms = 128 in
+    (* Upper limit for OCaml domain count (OCAMLRUNPARAM=d<N> ceiling) *)
+    let max_doms = 4096 in
     Array.init max_doms (fun i ->
         (* Use a different pid for each domain *)
         Trace.Thread_ref.ref (i + 1))
