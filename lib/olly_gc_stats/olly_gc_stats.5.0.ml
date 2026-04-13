@@ -105,7 +105,7 @@ let print_percentiles json output hist =
   let total_heap = !minor_words -. !promoted_words in
   let promoted_pct = !promoted_words /. !minor_words *. 100.0 in
 
-  if json then (
+  if json then
     let distribs =
       List.init (Array.length percentiles) (fun i ->
           let percentile = percentiles.(i) in
@@ -125,16 +125,17 @@ let print_percentiles json output hist =
             Buffer.add_string buf
               (Printf.sprintf
                  {|"%d": {"wall_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f}|}
-                 i c (to_sec g) (to_sec g *. 100. /. c))))
+                 i c (to_sec g)
+                 (to_sec g *. 100. /. c))))
         (Array.combine domain_elapsed_times domain_gc_times);
       Buffer.contents buf
     in
     Printf.fprintf oc
-      {|{"wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
+      {|{"version": 1, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
       real_time !total_cpu_time total_gc_time gc_overhead domain_stats
       mean_latency stddev_latency min_latency max_latency distribs total_heap
       !minor_words !promoted_words promoted_pct !minor_collections
-      !major_collections !forced_major_collections !compactions)
+      !major_collections !forced_major_collections !compactions
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
