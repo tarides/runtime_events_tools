@@ -1,3 +1,5 @@
+external is_process_alive : int -> bool = "olly_is_process_alive"
+
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
@@ -105,17 +107,30 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
   { alive; cursor; close; pid = child_pid }
 
 let attach_process (dir : string) (pid : int) : subprocess =
+  (* Check the target process exists before attempting to attach *)
+  if not (is_process_alive pid) then
+    raise (Fail (Printf.sprintf "process %d does not exist" pid));
+  (* Check the events file exists and is readable *)
+  let ring_file = Filename.concat dir (string_of_int pid ^ ".events") in
+  if not (Sys.file_exists ring_file) then
+    raise
+      (Fail
+         (Printf.sprintf
+            "no events file found at %s. Is the target process running with \
+             OCAML_RUNTIME_EVENTS_START=1?"
+            ring_file));
+  (try Unix.access ring_file [ Unix.R_OK ]
+   with Unix.Unix_error (Unix.EACCES, _, _) ->
+     raise
+       (Fail
+          (Printf.sprintf "events file %s is not readable by the current user"
+             ring_file)));
   let cursor =
     try Runtime_events.create_cursor (Some (dir, pid))
     with Failure str ->
-      (* Provide some context for which directory was passed to create_cursor *)
-      failwith (str ^ " Directory: " ^ dir)
+      raise (Fail (str ^ " Directory: " ^ dir))
   in
-  let alive () =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+  let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
