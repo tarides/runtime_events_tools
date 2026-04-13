@@ -49,22 +49,6 @@ let print_table oc (data : string list list) =
 
   List.iter print_row data
 
-let print_global_allocation_stats oc =
-  Printf.fprintf oc "GC allocations (in words): \n";
-  let minor_words = ref 0.0 in
-  let promoted_words = ref 0.0 in
-  Array.iteri
-    (fun i v ->
-      minor_words := !minor_words +. float_of_int v;
-      promoted_words :=
-        !promoted_words +. float_of_int domain_promoted_words.(i))
-    domain_minor_words;
-  Printf.fprintf oc "Total heap:\t %.0f\n" (!minor_words -. !promoted_words);
-  Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
-  Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
-    (!promoted_words /. !minor_words *. 100.0);
-  Printf.fprintf oc "\n"
-
 let print_percentiles json output hist =
   let to_sec x = float_of_int x /. 1_000_000_000. in
   let ms ns = ns /. 1_000_000. in
@@ -107,7 +91,21 @@ let print_percentiles json output hist =
       else total_cpu_time := !total_cpu_time +. cpu_time)
     ap;
 
-  if json then
+  let gc_overhead = total_gc_time /. !total_cpu_time *. 100. in
+  let stddev_latency = H.stddev hist |> ms in
+  let min_latency = float_of_int (H.min hist) |> ms in
+  let minor_words = ref 0.0 in
+  let promoted_words = ref 0.0 in
+  Array.iteri
+    (fun i v ->
+      minor_words := !minor_words +. float_of_int v;
+      promoted_words :=
+        !promoted_words +. float_of_int domain_promoted_words.(i))
+    domain_minor_words;
+  let total_heap = !minor_words -. !promoted_words in
+  let promoted_pct = !promoted_words /. !minor_words *. 100.0 in
+
+  if json then (
     let distribs =
       List.init (Array.length percentiles) (fun i ->
           let percentile = percentiles.(i) in
@@ -118,17 +116,32 @@ let print_percentiles json output hist =
           Printf.sprintf "\"%.4f\": %s" percentile value)
       |> String.concat ","
     in
+    let domain_stats =
+      let buf = Buffer.create 256 in
+      Array.iteri
+        (fun i (c, g) ->
+          if c > 0. then (
+            if Buffer.length buf > 0 then Buffer.add_char buf ',';
+            Buffer.add_string buf
+              (Printf.sprintf
+                 {|"%d": {"wall_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f}|}
+                 i c (to_sec g) (to_sec g *. 100. /. c))))
+        (Array.combine domain_elapsed_times domain_gc_times);
+      Buffer.contents buf
+    in
     Printf.fprintf oc
-      {|{"mean_latency": %f, "max_latency": %f, "distr_latency": {%s}}|}
-      mean_latency max_latency distribs
+      {|{"wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
+      real_time !total_cpu_time total_gc_time gc_overhead domain_stats
+      mean_latency stddev_latency min_latency max_latency distribs total_heap
+      !minor_words !promoted_words promoted_pct !minor_collections
+      !major_collections !forced_major_collections !compactions)
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
     Printf.fprintf oc "Wall time (s):\t%.2f\n" real_time;
     Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
-    Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n"
-      (total_gc_time /. !total_cpu_time *. 100.);
+    Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n" gc_overhead;
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
@@ -151,9 +164,8 @@ let print_percentiles json output hist =
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
     Printf.fprintf oc "#[Mean (ms):\t%.2f,\t Stddev (ms):\t%.2f]\n" mean_latency
-      (H.stddev hist |> ms);
-    Printf.fprintf oc "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n"
-      (float_of_int (H.min hist) |> ms)
+      stddev_latency;
+    Printf.fprintf oc "#[Min (ms):\t%.2f,\t max (ms):\t%.2f]\n" min_latency
       max_latency;
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Percentile \t Latency (ms)\n";
@@ -161,7 +173,12 @@ let print_percentiles json output hist =
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms));
     Printf.fprintf oc "\n";
-    print_global_allocation_stats oc;
+    Printf.fprintf oc "GC allocations (in words): \n";
+    Printf.fprintf oc "Total heap:\t %.0f\n" total_heap;
+    Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
+    Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
+      promoted_pct;
+    Printf.fprintf oc "\n";
     Printf.fprintf oc "Minor Gen: %i collections\n" !minor_collections;
     Printf.fprintf oc "Major Gen: %i collections %i forced collections\n"
       !major_collections !forced_major_collections;
