@@ -4,12 +4,9 @@ open Runtime_events
 
 let emit tracer get_kind ring_id ts ev value =
   Trace.emit tracer
-    {
-      name = User.name ev;
-      ts = Timestamp.to_int64 ts;
-      ring_id;
-      kind = get_kind value;
-    }
+    ~name:(User.name ev)
+    ~ts:(Timestamp.to_int64 ts)
+    ~ring_id ~kind:(get_kind value)
 
 let from_int x = Counter x
 let from_unit () = Instant

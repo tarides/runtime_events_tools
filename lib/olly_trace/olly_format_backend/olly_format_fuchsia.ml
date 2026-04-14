@@ -40,18 +40,17 @@ let close trace =
   flush trace;
   Trace_fuchsia.Collector_fuchsia.close trace.collector
 
-let emit trace evt =
+let emit trace ~ring_id ~ts ~name ~kind =
   let open Event in
-  let t_ref = trace.doms.(evt.ring_id)
-  and time_ns = evt.ts
-  and name = evt.name in
-  match evt.kind with
-  | SpanBegin | SpanEnd ->
-      let write =
-        if evt.kind = SpanBegin then Trace.Event.Duration_begin.encode
-        else Trace.Event.Duration_end.encode
-      in
-      write trace.buf ~args:[] ~t_ref ~name ~time_ns ()
+  let t_ref = trace.doms.(ring_id)
+  and time_ns = ts in
+  match kind with
+  | SpanBegin ->
+      Trace.Event.Duration_begin.encode trace.buf ~args:[] ~t_ref ~name
+        ~time_ns ()
+  | SpanEnd ->
+      Trace.Event.Duration_end.encode trace.buf ~args:[] ~t_ref ~name
+        ~time_ns ()
   | Counter value ->
       Trace.Event.Counter.encode trace.buf ~t_ref ~name ~time_ns
         ~args:[ ("v", A_int value) ]
