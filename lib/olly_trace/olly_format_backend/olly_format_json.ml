@@ -3,46 +3,78 @@ open Olly_format_backend
 let name = "json"
 let description = "Chrome Trace Format"
 
-type trace = { file : out_channel; buf : Buffer.t }
+type trace = { file : out_channel; buf : Buffer.t; digits : Bytes.t }
 
 let create ~filename =
   let file = open_out filename in
   output_string file "[";
-  { file; buf = Buffer.create 256 }
+  { file; buf = Buffer.create 256; digits = Bytes.create 20 }
 
 let close trace = close_out trace.file
 
+let buf_add_int buf digits n =
+  if n = 0 then Buffer.add_char buf '0'
+  else begin
+    let n = if n < 0 then (Buffer.add_char buf '-'; -n) else n in
+    let pos = ref (Bytes.length digits) in
+    let n = ref n in
+    while !n > 0 do
+      decr pos;
+      Bytes.set digits !pos (Char.chr (Char.code '0' + !n mod 10));
+      n := !n / 10
+    done;
+    Buffer.add_subbytes buf digits !pos (Bytes.length digits - !pos)
+  end
+
+let buf_add_int64 buf digits n =
+  if n = 0L then Buffer.add_char buf '0'
+  else begin
+    let n = if n < 0L then (Buffer.add_char buf '-'; Int64.neg n) else n in
+    let pos = ref (Bytes.length digits) in
+    let n = ref n in
+    while !n > 0L do
+      decr pos;
+      Bytes.set digits !pos
+        (Char.chr (Char.code '0' + Int64.to_int (Int64.rem !n 10L)));
+      n := Int64.div !n 10L
+    done;
+    Buffer.add_subbytes buf digits !pos (Bytes.length digits - !pos)
+  end
+
+let buf_add_ts_us buf digits ts =
+  buf_add_int64 buf digits (Int64.div ts 1000L)
+
 let write_span trace ~name ~ts ~ring_id ph =
-  let buf = trace.buf in
+  let buf = trace.buf and digits = trace.digits in
   Buffer.clear buf;
   Buffer.add_string buf "{\"name\": \"";
   Buffer.add_string buf name;
   Buffer.add_string buf "\", \"cat\": \"PERF\", \"ph\":\"";
   Buffer.add_string buf ph;
   Buffer.add_string buf "\", \"ts\":";
-  Buffer.add_string buf (Int64.to_string (Int64.div ts 1000L));
+  buf_add_ts_us buf digits ts;
   Buffer.add_string buf ", \"pid\": ";
-  Buffer.add_string buf (string_of_int ring_id);
+  buf_add_int buf digits ring_id;
   Buffer.add_string buf ", \"tid\": ";
-  Buffer.add_string buf (string_of_int ring_id);
+  buf_add_int buf digits ring_id;
   Buffer.add_string buf "},\n";
   Buffer.output_buffer trace.file buf
 
 let write_counter trace ~name ~ts ~ring_id value =
-  let buf = trace.buf in
+  let buf = trace.buf and digits = trace.digits in
   Buffer.clear buf;
   Buffer.add_string buf "{\"name\": \"";
   Buffer.add_string buf name;
   Buffer.add_string buf "\", \"cat\": \"PERF\", \"ph\":\"C\", \"ts\":";
-  Buffer.add_string buf (Int64.to_string (Int64.div ts 1000L));
+  buf_add_ts_us buf digits ts;
   Buffer.add_string buf ", \"pid\": ";
-  Buffer.add_string buf (string_of_int ring_id);
+  buf_add_int buf digits ring_id;
   Buffer.add_string buf ", \"tid\": ";
-  Buffer.add_string buf (string_of_int ring_id);
+  buf_add_int buf digits ring_id;
   Buffer.add_string buf ", \"args\": {\"";
   Buffer.add_string buf name;
   Buffer.add_string buf "\": ";
-  Buffer.add_string buf (string_of_int value);
+  buf_add_int buf digits value;
   Buffer.add_string buf "}},\n";
   Buffer.output_buffer trace.file buf
 
