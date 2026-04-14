@@ -46,6 +46,9 @@ let write_counter trace ~name ~ts ~ring_id value =
   Buffer.add_string buf "}},\n";
   Buffer.output_buffer trace.file buf
 
+let emit_counter trace ~ring_id ~ts ~name ~value =
+  write_counter trace ~name ~ts ~ring_id value
+
 let emit trace ~ring_id ~ts ~name ~kind =
   let open Event in
   match kind with
