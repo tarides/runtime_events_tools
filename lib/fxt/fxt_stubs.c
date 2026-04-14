@@ -2,6 +2,7 @@
 #include <caml/memory.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 /* Pack an FXT event header and write it directly into a Bytes.t buffer.
    All arguments are unboxed/untagged to avoid Int64 allocation.
@@ -70,6 +71,34 @@ CAMLprim value fxt_put_arg_header_i32(
      bits  4-15: size in words
      bits 16-31: name string ref
 */
+/* Write an int64 divided by a divisor as decimal digits into a Bytes.t.
+   Returns the number of bytes written. Used for JSON timestamp formatting
+   (ns -> us conversion + decimal rendering) in a single C call, avoiding
+   the ~30 boxed Int64 allocations from OCaml's digit-by-digit loop. */
+CAMLprim value fxt_int64_div_to_decimal(
+  value v_buf, value v_pos, value v_n, value v_divisor)
+{
+  uint8_t *buf = Bytes_val(v_buf) + Long_val(v_pos);
+  int64_t n = Int64_val(v_n) / Long_val(v_divisor);
+  /* Manual decimal conversion — faster than snprintf for known-positive
+     values (timestamps are always positive). */
+  if (n == 0) {
+    buf[0] = '0';
+    return Val_long(1);
+  }
+  char tmp[20];
+  int i = 20;
+  int64_t v = n < 0 ? -n : n;
+  while (v > 0) {
+    tmp[--i] = '0' + (int)(v % 10);
+    v /= 10;
+  }
+  if (n < 0) tmp[--i] = '-';
+  int len = 20 - i;
+  memcpy(buf, tmp + i, len);
+  return Val_long(len);
+}
+
 CAMLprim value fxt_put_arg_header_i64(
   value v_buf, value v_pos,
   value v_arg_words, value v_name_ref)

@@ -26,23 +26,12 @@ let buf_add_int buf digits n =
     Buffer.add_subbytes buf digits !pos (Bytes.length digits - !pos)
   end
 
-let buf_add_int64 buf digits n =
-  if n = 0L then Buffer.add_char buf '0'
-  else begin
-    let n = if n < 0L then (Buffer.add_char buf '-'; Int64.neg n) else n in
-    let pos = ref (Bytes.length digits) in
-    let n = ref n in
-    while !n > 0L do
-      decr pos;
-      Bytes.set digits !pos
-        (Char.chr (Char.code '0' + Int64.to_int (Int64.rem !n 10L)));
-      n := Int64.div !n 10L
-    done;
-    Buffer.add_subbytes buf digits !pos (Bytes.length digits - !pos)
-  end
-
+(* Write timestamp as microseconds (ts_ns / 1000) directly into the buffer
+   using a C stub. Avoids ~30 boxed Int64 allocations from digit-by-digit
+   Int64.div/Int64.rem in OCaml. *)
 let buf_add_ts_us buf digits ts =
-  buf_add_int64 buf digits (Int64.div ts 1000L)
+  let len = Fxt_buf.int64_div_to_decimal digits 0 ts 1000 in
+  Buffer.add_subbytes buf digits 0 len
 
 let write_span trace ~name ~ts ~ring_id ph =
   let buf = trace.buf and digits = trace.digits in

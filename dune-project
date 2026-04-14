@@ -20,7 +20,7 @@
   (ocaml (>= "5.0.0~"))
   hdr_histogram
   (cmdliner (>= 2.0.0))
-(menhir :with-test)
+  (menhir :with-test)
   (ocamlformat (and :with-dev-setup (= 0.28.1)))
   (alcotest (and :with-test (>= 1.9.0)))))
 

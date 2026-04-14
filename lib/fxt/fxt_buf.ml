@@ -54,3 +54,7 @@ external put_arg_header_i64 :
   Bytes.t -> int ->
   int -> int -> unit
   = "fxt_put_arg_header_i64" [@@noalloc]
+
+external int64_div_to_decimal :
+  Bytes.t -> int -> int64 -> int -> int
+  = "fxt_int64_div_to_decimal"
