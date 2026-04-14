@@ -19,24 +19,23 @@ let close trace =
 
 let ts_to_us ts = Int64.(to_float ts /. 1000.)
 
-let write_json trace evt ph args =
-  let open Event in
+let write_json trace ~name ~ts ~ring_id ph args =
   array_elt_begin trace;
   Printf.fprintf trace.file
     "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"%s\", \"ts\":%.3f, \
      \"pid\": %d, \"tid\": %d%t}\n"
-    evt.name ph (ts_to_us evt.ts) evt.ring_id evt.ring_id
+    name ph (ts_to_us ts) ring_id ring_id
     (match args with
     | None -> ignore
     | Some args -> fun oc -> Printf.fprintf oc ", \"args\": %t" args)
 
-let emit trace evt =
+let emit trace ~ring_id ~ts ~name ~kind =
   let open Event in
-  match evt.kind with
-  | SpanBegin | SpanEnd ->
-      write_json trace evt (if evt.kind = SpanBegin then "B" else "E") None
+  match kind with
+  | SpanBegin -> write_json trace ~name ~ts ~ring_id "B" None
+  | SpanEnd -> write_json trace ~name ~ts ~ring_id "E" None
   | Counter value ->
-      Some (fun oc -> Printf.fprintf oc "{\"%s\": %d}" evt.name value)
-      |> write_json trace evt "C"
-  | Instant -> write_json trace evt "i" None
+      Some (fun oc -> Printf.fprintf oc "{\"%s\": %d}" name value)
+      |> write_json trace ~name ~ts ~ring_id "C"
+  | Instant -> write_json trace ~name ~ts ~ring_id "i" None
   | _ -> ()
