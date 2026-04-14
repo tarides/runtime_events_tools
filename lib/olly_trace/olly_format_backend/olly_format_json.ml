@@ -29,13 +29,15 @@ let write_json trace ~name ~ts ~ring_id ph args =
     | None -> ignore
     | Some args -> fun oc -> Printf.fprintf oc ", \"args\": %t" args)
 
+let emit_counter trace ~ring_id ~ts ~name ~value =
+  Some (fun oc -> Printf.fprintf oc "{\"%s\": %d}" name value)
+  |> write_json trace ~name ~ts ~ring_id "C"
+
 let emit trace ~ring_id ~ts ~name ~kind =
   let open Event in
   match kind with
   | SpanBegin -> write_json trace ~name ~ts ~ring_id "B" None
   | SpanEnd -> write_json trace ~name ~ts ~ring_id "E" None
-  | Counter value ->
-      Some (fun oc -> Printf.fprintf oc "{\"%s\": %d}" name value)
-      |> write_json trace ~name ~ts ~ring_id "C"
+  | Counter value -> emit_counter trace ~ring_id ~ts ~name ~value
   | Instant -> write_json trace ~name ~ts ~ring_id "i" None
   | _ -> ()

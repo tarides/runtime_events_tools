@@ -12,10 +12,10 @@ let trace process_poller_sleep poll_sleep fmt trace_filename emit_counter
   in
   let runtime_counter ring_id ts counter value =
     if emit_counter then
-      Format.emit tracer
+      Format.emit_counter tracer
         ~name:(Runtime_events.runtime_counter_name counter)
         ~ts:(Runtime_events.Timestamp.to_int64 ts)
-        ~ring_id ~kind:(Counter value)
+        ~ring_id ~value
     else ()
   in
   let runtime_begin = runtime_phase SpanBegin
