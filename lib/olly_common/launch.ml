@@ -1,9 +1,9 @@
 external is_process_alive : int -> bool = "olly_is_process_alive"
 
 (** Maximum number of domains supported. The OCaml runtime allows configuring
-    this via [OCAMLRUNPARAM=d<N>] (default 128 on 64-bit, 16 on 32-bit) up to
-    an absolute ceiling of 4096. Since no public API exposes the configured
-    value, we use the ceiling to guarantee correctness for all configurations. *)
+    this via [OCAMLRUNPARAM=d<N>] (default 128 on 64-bit, 16 on 32-bit) up to an
+    absolute ceiling of 4096. Since no public API exposes the configured value,
+    we use the ceiling to guarantee correctness for all configurations. *)
 let max_domains = 4096
 
 let lost_events ring_id num =
@@ -133,8 +133,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
              ring_file)));
   let cursor =
     try Runtime_events.create_cursor (Some (dir, pid))
-    with Failure str ->
-      raise (Fail (str ^ " Directory: " ^ dir))
+    with Failure str -> raise (Fail (str ^ " Directory: " ^ dir))
   in
   let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in

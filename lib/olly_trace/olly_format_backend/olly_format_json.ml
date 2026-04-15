@@ -15,12 +15,17 @@ let close trace = close_out trace.file
 let buf_add_int buf digits n =
   if n = 0 then Buffer.add_char buf '0'
   else begin
-    let n = if n < 0 then (Buffer.add_char buf '-'; -n) else n in
+    let n =
+      if n < 0 then (
+        Buffer.add_char buf '-';
+        -n)
+      else n
+    in
     let pos = ref (Bytes.length digits) in
     let n = ref n in
     while !n > 0 do
       decr pos;
-      Bytes.set digits !pos (Char.chr (Char.code '0' + !n mod 10));
+      Bytes.set digits !pos (Char.chr (Char.code '0' + (!n mod 10)));
       n := !n / 10
     done;
     Buffer.add_subbytes buf digits !pos (Bytes.length digits - !pos)

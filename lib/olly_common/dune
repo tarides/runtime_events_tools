@@ -1,4 +1,6 @@
 (library
  (name olly_common)
  (libraries runtime_events unix cmdliner)
- (foreign_stubs (language c) (names process_utils)))
+ (foreign_stubs
+  (language c)
+  (names process_utils)))

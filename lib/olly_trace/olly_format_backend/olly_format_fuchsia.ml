@@ -3,10 +3,7 @@ open Olly_format_backend
 let name = "fuchsia"
 let description = "Perfetto"
 
-type trace = {
-  writer : Fxt_write.t;
-  doms : Fxt_write.thread array;
-}
+type trace = { writer : Fxt_write.t; doms : Fxt_write.thread array }
 
 let create ~filename =
   let oc = Out_channel.open_bin filename in
