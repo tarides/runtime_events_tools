@@ -5,10 +5,9 @@
 (library
  (name olly_format_json)
  (modules olly_format_json)
- (libraries olly_format_backend))
+ (libraries olly_format_backend fxt))
 
 (library
  (name olly_format_fuchsia)
  (modules olly_format_fuchsia)
- (optional)
- (libraries olly_format_backend trace trace-fuchsia))
+ (libraries olly_format_backend fxt))

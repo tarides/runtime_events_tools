@@ -6,22 +6,16 @@ let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
     Format.emit tracer
-      {
-        name = Runtime_events.runtime_phase_name phase;
-        ts = Runtime_events.Timestamp.to_int64 ts;
-        ring_id;
-        kind;
-      }
+      ~name:(Runtime_events.runtime_phase_name phase)
+      ~ts:(Runtime_events.Timestamp.to_int64 ts)
+      ~ring_id ~kind
   in
   let runtime_counter ring_id ts counter value =
     if emit_counter then
-      Format.emit tracer
-        {
-          name = Runtime_events.runtime_counter_name counter;
-          ts = Runtime_events.Timestamp.to_int64 ts;
-          ring_id;
-          kind = Counter value;
-        }
+      Format.emit_counter tracer
+        ~name:(Runtime_events.runtime_counter_name counter)
+        ~ts:(Runtime_events.Timestamp.to_int64 ts)
+        ~ring_id ~value
     else ()
   in
   let runtime_begin = runtime_phase SpanBegin
