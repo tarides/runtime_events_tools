@@ -14,14 +14,14 @@ The main tool is called `olly`, it provides a number of sub-commands for gatheri
 
 Running `olly gc-stats` will report the GC running time and GC tail latency profile of an OCaml executable.
 
-| Metric             | Description                                                                                                                                   |
-|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| Wall time          | Real execution time of the program                                                                                                            |
-| CPU time           | Total CPU time across all domains                                                                                                             |
-| GC time            | Total time spent by the program performing garbage collection (major and minor)                                                               |
-| GC overhead        | Percentage of time taken up by GC against the total execution time                                                                            |
-| GC time per domain | Time spent by every domain performing garbage collection (major and minor cycles). Domains are reported with their domain ID (e.g. `Domain0`) |
-| GC latency profile | Mean, standard deviation and percentile latency profile of GC events.                                                                         |
+| Metric             | Description                                                                        |
+|--------------------|------------------------------------------------------------------------------------|
+| Wall time          | Real execution time of the program                                                 |
+| CPU time           | Total CPU time across all domains                                                  |
+| GC time            | Total time spent by the program performing garbage collection (major and minor)    |
+| GC overhead        | Percentage of time taken up by GC against the total execution time                 |
+| GC time per domain | Time spent by every domain performing garbage collection (major and minor cycles). |
+| GC latency profile | Mean, standard deviation and percentile latency profile of GC events.              |
 
 Note: all times are wall-clock and so include time spent blocking.
 
@@ -68,6 +68,15 @@ Percentile       Latency (ms)
 99.9990          72.55
 99.9999          72.55
 100.0000         72.55
+
+GC allocations (in words):
+Total heap:	 501516808
+Minor heap:	 602373895
+Promoted words:	 100857087 (16.74%)
+
+Minor Gen: 904 collections
+Major Gen: 34 collections 0 forced collections
+Compactions: 0
 ```
 
 ### Tracing a program

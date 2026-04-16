@@ -135,11 +135,15 @@ GC stats subcommand help:
          GC time per domain
              Time spent by every domain performing garbage collection (major
              and minor cycles). Domains are reported with their domain ID (e.g.
-             `Domain0`)
+             `Domain 0`)
   
          GC latency profile
              Mean, standard deviation and percentile latency profile of GC
              events.
+  
+         GC allocations
+             GC allocation and promotion in machine words during program
+             execution. Counts of Compactions, and Minor and Major collections.
   
   ARGUMENTS
          EXECUTABLE
@@ -163,6 +167,10 @@ GC stats subcommand help:
   
          --json
              Print the output in json instead of human-readable format.
+  
+         --log-wsize=log-wsize
+             Size of the per-domain runtime events ring buffers in log powers
+             of two words. Defaults to 16.
   
          -o output, --output=output
              Redirect the output of `olly` to specified file. The output of the
@@ -196,6 +204,14 @@ GC stats subcommand help:
   SEE ALSO
          olly(1)
   
+
+
+
+
+
+
+
+
 
 Latency subcommand help:
   $ olly latency --help=plain

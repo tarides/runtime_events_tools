@@ -16,12 +16,12 @@ type exec_config = Attach of string * int | Execute of string list
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
-let exec_process (config : runtime_events_config) (argsl : string list) :
+let exec_process (config : runtime_events_config) (args : string list) :
     subprocess =
-  if not (List.length argsl > 0) then
+  if not (List.length args > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
-  let executable_filename = List.hd argsl in
+  let executable_filename = List.hd args in
 
   let dir =
     match config.dir with
@@ -72,7 +72,7 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
   in
   let child_pid =
     try
-      Unix.create_process_env executable_filename (Array.of_list argsl) env
+      Unix.create_process_env executable_filename (Array.of_list args) env
         Unix.stdin Unix.stdout Unix.stderr
     with Unix.Unix_error (Unix.ENOENT, _, _) ->
       raise
@@ -189,7 +189,7 @@ let empty_config =
     (* Use default size 16. *)
   }
 
-let olly config (exec_args : exec_config) =
+let olly config exec_args =
   config.init ();
   Fun.protect ~finally:config.cleanup (fun () ->
       let runtime_config =

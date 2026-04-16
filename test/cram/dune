@@ -1,3 +1,3 @@
 (cram
  (package runtime_events_tools)
- (deps %{bin:olly}))
+ (deps %{bin:olly} %{dep:../test_gc_stats.exe}))
