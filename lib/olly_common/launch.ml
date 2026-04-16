@@ -1,3 +1,5 @@
+external is_process_alive : int -> bool = "olly_is_process_alive"
+
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
@@ -31,6 +33,23 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
   if not @@ Sys.is_directory dir then
     raise (Fail (Printf.sprintf "file %s is not a directory" dir));
 
+  let overridden_vars =
+    "OCAML_RUNTIME_EVENTS_START" :: "OCAML_RUNTIME_EVENTS_DIR"
+    :: "OCAML_RUNTIME_EVENTS_PRESERVE"
+    ::
+    (match config.log_wsize with
+    | None -> []
+    | Some _ -> [ "OCAMLRUNPARAM" ])
+  in
+  let base_env =
+    Unix.environment () |> Array.to_seq
+    |> Seq.filter (fun entry ->
+        not
+          (List.exists
+             (fun var -> String.starts_with ~prefix:(var ^ "=") entry)
+             overridden_vars))
+    |> Array.of_seq
+  in
   let env =
     Array.concat
       [
@@ -48,7 +67,7 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
             match Sys.getenv_opt "OCAMLRUNPARAM" with
             | None -> [| "OCAMLRUNPARAM=" ^ event_log |]
             | Some params -> [| "OCAMLRUNPARAM=" ^ params ^ "," ^ event_log |]));
-        Unix.environment ();
+        base_env;
       ]
   in
   let child_pid =
@@ -71,27 +90,46 @@ let exec_process (config : runtime_events_config) (argsl : string list) :
     | 0, _ -> true
     | p, _ when p = child_pid -> false
     | _, _ -> assert false
+    | exception Unix.Unix_error (Unix.EINTR, _, _) -> true
   and close () =
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
-       the child process not to remove them *)
-    let ring_file = Filename.concat dir (string_of_int child_pid ^ ".events") in
-    Unix.unlink ring_file
+       the child process not to remove them. However, if the user
+       explicitly set OCAML_RUNTIME_EVENTS_PRESERVE=1 we honour
+       their intent and leave the file in place. *)
+    if Sys.getenv_opt "OCAML_RUNTIME_EVENTS_PRESERVE" <> Some "1" then begin
+      let ring_file =
+        Filename.concat dir (string_of_int child_pid ^ ".events")
+      in
+      Unix.unlink ring_file
+    end
   in
   { alive; cursor; close; pid = child_pid }
 
 let attach_process (dir : string) (pid : int) : subprocess =
+  (* Check the target process exists before attempting to attach *)
+  if not (is_process_alive pid) then
+    raise (Fail (Printf.sprintf "process %d does not exist" pid));
+  (* Check the events file exists and is readable *)
+  let ring_file = Filename.concat dir (string_of_int pid ^ ".events") in
+  if not (Sys.file_exists ring_file) then
+    raise
+      (Fail
+         (Printf.sprintf
+            "no events file found at %s. Is the target process running with \
+             OCAML_RUNTIME_EVENTS_START=1?"
+            ring_file));
+  (try Unix.access ring_file [ Unix.R_OK ]
+   with Unix.Unix_error (Unix.EACCES, _, _) ->
+     raise
+       (Fail
+          (Printf.sprintf "events file %s is not readable by the current user"
+             ring_file)));
   let cursor =
     try Runtime_events.create_cursor (Some (dir, pid))
-    with Failure str ->
-      (* Provide some context for which directory was passed to create_cursor *)
-      failwith (str ^ " Directory: " ^ dir)
+    with Failure str -> raise (Fail (str ^ " Directory: " ^ dir))
   in
-  let alive () =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+  let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
   { alive; cursor; close; pid }
 
@@ -100,14 +138,25 @@ let launch_process config (exec_args : exec_config) : subprocess =
   | Execute argsl -> exec_process config argsl
   | Attach (dir, pid) -> attach_process dir pid
 
+let interrupted = Atomic.make false
+
 let collect_events poll_sleep child callbacks =
-  (* Read from the child process *)
-  while child.alive () do
-    Runtime_events.read_poll child.cursor callbacks None |> ignore;
-    if poll_sleep > 0.0 then Unix.sleepf poll_sleep
-  done;
-  (* Do one more poll in case there are any remaining events we've missed *)
-  Runtime_events.read_poll child.cursor callbacks None |> ignore
+  let old_handler =
+    Sys.signal Sys.sigint
+      (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
+  in
+  Fun.protect
+    ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
+    (fun () ->
+      (* Read from the child process *)
+      while child.alive () && not (Atomic.get interrupted) do
+        Runtime_events.read_poll child.cursor callbacks None |> ignore;
+        if poll_sleep > 0.0 then
+          try Unix.sleepf poll_sleep
+          with Unix.Unix_error (Unix.EINTR, _, _) -> ()
+      done;
+      (* Do one more poll in case there are any remaining events we've missed *)
+      Runtime_events.read_poll child.cursor callbacks None |> ignore)
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
