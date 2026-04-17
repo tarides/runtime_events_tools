@@ -45,6 +45,10 @@ let gc_stats_cmd =
           "GC allocation and promotion in machine words during program \
            execution. Counts of Compactions, and Minor and Major collections."
         );
+      `I
+        ( "Max RSS",
+          "Peak resident set size (in kB) of the child process, sampled during \
+           execution." );
       `Blocks help_secs;
     ]
   in

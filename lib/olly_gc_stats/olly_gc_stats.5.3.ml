@@ -11,6 +11,7 @@ type ts = { mutable start_time : float; mutable end_time : float }
 
 let number_domains = 128
 let wall_time = { start_time = 0.; end_time = 0. }
+let rss_collector = Olly_common.Max_rss.create ()
 let domain_elapsed_times = Array.make number_domains 0.
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
@@ -204,12 +205,13 @@ let print_percentiles json output hist =
       Buffer.contents buf
     in
     Printf.fprintf oc
-      {|{"version": 1, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "major_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "domain_alloc_stats": {%s}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
-      real_time !total_cpu_time total_gc_time gc_overhead domain_stats
-      mean_latency stddev_latency min_latency max_latency distribs total_heap
-      !minor_words !major_words !promoted_words promoted_pct domain_alloc_stats
-      !minor_collections !major_collections !forced_major_collections
-      !compactions
+      {|{"version": 1, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "max_rss_kb": %d, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "major_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "domain_alloc_stats": {%s}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
+      real_time !total_cpu_time total_gc_time gc_overhead
+      (Olly_common.Max_rss.max_rss_kb rss_collector)
+      domain_stats mean_latency stddev_latency min_latency max_latency distribs
+      total_heap !minor_words !major_words !promoted_words promoted_pct
+      domain_alloc_stats !minor_collections !major_collections
+      !forced_major_collections !compactions
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
@@ -217,6 +219,8 @@ let print_percentiles json output hist =
     Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n" gc_overhead;
+    Printf.fprintf oc "Max RSS (kB):\t%d\n"
+      (Olly_common.Max_rss.max_rss_kb rss_collector);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
@@ -427,6 +431,7 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
 
   let init = Fun.id in
   let cleanup () = print_percentiles json output hist in
+  let on_poll = Olly_common.Max_rss.sample rss_collector in
   let open Olly_common.Launch in
   try
     `Ok
@@ -439,6 +444,7 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
            lifecycle;
            init;
            cleanup;
+           on_poll;
            poll_sleep;
            runtime_events_dir;
            runtime_events_log_wsize;

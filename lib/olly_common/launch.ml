@@ -140,7 +140,7 @@ let launch_process config (exec_args : exec_config) : subprocess =
 
 let interrupted = Atomic.make false
 
-let collect_events poll_sleep child callbacks =
+let collect_events poll_sleep ~on_poll child callbacks =
   let old_handler =
     Sys.signal Sys.sigint
       (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
@@ -150,6 +150,7 @@ let collect_events poll_sleep child callbacks =
     (fun () ->
       (* Read from the child process *)
       while child.alive () && not (Atomic.get interrupted) do
+        on_poll child.pid;
         Runtime_events.read_poll child.cursor callbacks None |> ignore;
         if poll_sleep > 0.0 then
           try Unix.sleepf poll_sleep
@@ -168,6 +169,7 @@ type consumer_config = {
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
   init : unit -> unit;
   cleanup : unit -> unit;
+  on_poll : int -> unit;
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
@@ -182,6 +184,7 @@ let empty_config =
     extra = Fun.id;
     init = (fun () -> ());
     cleanup = (fun () -> ());
+    on_poll = (fun _ -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None;
     (* Use default tmp directory *)
@@ -215,4 +218,5 @@ let olly config exec_args =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep child callbacks))
+          collect_events config.poll_sleep ~on_poll:config.on_poll child
+            callbacks))
