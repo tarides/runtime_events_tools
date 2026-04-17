@@ -145,6 +145,10 @@ GC stats subcommand help:
              GC allocation and promotion in machine words during program
              execution. Counts of Compactions, and Minor and Major collections.
   
+         Max RSS
+             Peak resident set size (in kB) of the child process, sampled
+             during execution.
+  
   ARGUMENTS
          EXECUTABLE
              Executable and arguments to trace.

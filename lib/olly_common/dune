@@ -3,4 +3,4 @@
  (libraries runtime_events unix cmdliner)
  (foreign_stubs
   (language c)
-  (names process_utils)))
+  (names process_utils max_rss_stubs)))
