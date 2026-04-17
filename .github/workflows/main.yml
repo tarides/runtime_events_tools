@@ -13,6 +13,7 @@ jobs:
   build:
 
     strategy:
+      fail-fast: false
       matrix:
         ocaml-compiler:
           - 5.0
@@ -23,8 +24,16 @@ jobs:
         os:
           - ubuntu-latest
           - macos-15
+        include:
+          - ocaml-compiler: ocaml-base-compiler.5.5.0~alpha3
+            os: ubuntu-latest
+            experimental: true
+          - ocaml-compiler: ocaml-base-compiler.5.5.0~alpha3
+            os: macos-15
+            experimental: true
 
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental == true }}
 
     steps:
       - name: Checkout code

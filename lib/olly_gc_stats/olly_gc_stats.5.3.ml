@@ -408,25 +408,9 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
         domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
     | _ -> ()
   in
-  (* TODO: OCaml 5.5 adds EV_C_MINOR_PROMOTED_WORDS and
-     EV_C_MINOR_ALLOCATED_WORDS (ocaml/ocaml#14189) which report in words
-     directly, replacing the bytes-to-words conversion below. *)
-  let bytes_per_word = Sys.word_size / 8 in
-  let runtime_counter ring_id _ts counter_type value =
-    match counter_type with
-    | Runtime_events.EV_C_MINOR_PROMOTED ->
-        (* Reported as bytes, convert to words *)
-        domain_promoted_words.(ring_id) <-
-          domain_promoted_words.(ring_id) + (value / bytes_per_word)
-    | Runtime_events.EV_C_MINOR_ALLOCATED ->
-        (* Reported as bytes, convert to words *)
-        domain_minor_words.(ring_id) <-
-          domain_minor_words.(ring_id) + (value / bytes_per_word)
-    | Runtime_events.EV_C_MAJOR_ALLOCATED_WORDS ->
-        (* Allocations to the major heap of this Domain in words,
-          since the last major slice. *)
-        domain_major_words.(ring_id) <- domain_major_words.(ring_id) + value
-    | _ -> ()
+  let runtime_counter =
+    Gc_counters_shim.runtime_counter ~domain_minor_words ~domain_promoted_words
+      ~domain_major_words
   in
 
   let init = Fun.id in
