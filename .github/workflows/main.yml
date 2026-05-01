@@ -23,6 +23,16 @@ jobs:
         os:
           - ubuntu-latest
           - macos-15
+          - windows-latest
+        exclude:
+          - os: windows-latest
+            ocaml-compiler: 5.0
+          - os: windows-latest
+            ocaml-compiler: 5.1
+          - os: windows-latest
+            ocaml-compiler: 5.2
+          - os: windows-latest
+            ocaml-compiler: 5.4
 
     runs-on: ${{ matrix.os }}
 
@@ -37,7 +47,6 @@ jobs:
           opam-depext: false
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-
       - run: opam install . --deps-only --with-test
 
       - run: opam exec -- dune build
@@ -47,3 +56,4 @@ jobs:
       - run: |
           opam install . --with-dev-setup --with-test --deps-only
           opam exec -- dune build @fmt
+        if: runner.os != 'Windows'
