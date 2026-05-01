@@ -47,10 +47,6 @@ jobs:
           opam-depext: false
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - name: Pin patched hdr_histogram
-        run: opam pin hdr_histogram https://github.com/tmcgilchrist/hdr_histogram_ocaml.git#windows_support --no-action
-        if: runner.os == 'Windows'
-
       - run: opam install . --deps-only --with-test
 
       - run: opam exec -- dune build

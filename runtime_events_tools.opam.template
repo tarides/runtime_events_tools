@@ -1,3 +1,0 @@
-pin-depends: [
-  [ "hdr_histogram.0.0.5" "git+https://github.com/ocaml-multicore/hdr_histogram_ocaml.git#0.0.5" ]
-]
