@@ -34,9 +34,7 @@ let process_launch () =
        (* Clean up the child process so it doesn't leak.
           On Windows, open files cannot be deleted, so the orphan process
           would prevent dune from cleaning up its temp directory. *)
-       (try Unix.kill a.pid Sys.sigkill
-        with Unix.Unix_error _ | Invalid_argument _ -> ());
-       (try ignore (Unix.waitpid [] a.pid) with Unix.Unix_error _ -> ());
+       a.kill ();
        a.close ();
        launched
      with

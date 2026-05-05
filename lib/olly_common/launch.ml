@@ -13,6 +13,9 @@ type subprocess = {
   cursor : Runtime_events.cursor;
   close : unit -> unit;
   pid : int;
+  (* Terminate the process and wait for it to fully exit. Safe to call
+     more than once and safe to call after natural exit. *)
+  kill : unit -> unit;
 }
 
 type runtime_events_config = { log_wsize : int option; dir : string option }
@@ -84,6 +87,14 @@ let exec_process (config : runtime_events_config) (args : string list) :
         (Fail (Printf.sprintf "executable %s not found" executable_filename))
   in
   let child_pid = get_process_id child_handle in
+  (* On Windows Unix.kill takes a PID (uses OpenProcess) but Unix.waitpid
+     takes the HANDLE returned by create_process — they are different
+     values. On Unix the handle and PID coincide. *)
+  let kill () =
+    (try Unix.kill child_pid Sys.sigkill
+     with Unix.Unix_error _ | Invalid_argument _ -> ());
+    try ignore (Unix.waitpid [] child_handle) with Unix.Unix_error _ -> ()
+  in
   (* Poll until we can create a cursor for the child's ring buffer.
      The OCaml runtime creates the .events file then initializes it,
      so we retry create_cursor rather than just checking file existence.
@@ -106,10 +117,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
         (* Clean up the child process before failing — otherwise it becomes
            an orphan. On Windows, orphan processes hold .events files open
            and prevent dune from cleaning up its temp directory. *)
-        (try Unix.kill child_handle Sys.sigkill
-         with Unix.Unix_error _ | Invalid_argument _ -> ());
-        (try ignore (Unix.waitpid [] child_handle)
-         with Unix.Unix_error _ -> ());
+        kill ();
         let msg =
           match !last_exn with
           | Some (Failure str) -> str ^ " Directory: " ^ dir
@@ -136,7 +144,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
       try Unix.unlink ring_file with Unix.Unix_error _ -> ()
     end
   in
-  { alive; cursor; close; pid = child_pid }
+  { alive; cursor; close; pid = child_pid; kill }
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
@@ -163,7 +171,17 @@ let attach_process (dir : string) (pid : int) : subprocess =
   in
   let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
-  { alive; cursor; close; pid }
+  (* Best-effort: we did not create the process, so we have no handle to
+     waitpid on. Send SIGKILL and poll is_process_alive briefly. *)
+  let kill () =
+    (try Unix.kill pid Sys.sigkill
+     with Unix.Unix_error _ | Invalid_argument _ -> ());
+    let deadline = Unix.gettimeofday () +. 2.0 in
+    while is_process_alive pid && Unix.gettimeofday () < deadline do
+      Unix.sleepf 0.02
+    done
+  in
+  { alive; cursor; close; pid; kill }
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
