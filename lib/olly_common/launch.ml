@@ -5,12 +5,6 @@ external is_process_alive : int -> bool = "olly_is_process_alive"
    On Unix it's the identity function since the handle IS the PID. *)
 external get_process_id : int -> int = "olly_get_process_id"
 
-(* Windows has no SIGKILL — Unix.kill only routes SIGTERM through
-   TerminateProcess. On Unix we want SIGKILL because some test programs
-   (e.g. tight integer loops) never reach a signal-poll point and so
-   ignore SIGTERM. *)
-let terminate_signal = if Sys.win32 then Sys.sigterm else Sys.sigkill
-
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
 
@@ -101,7 +95,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
      the kill didn't take for any reason, hanging the test suite for
      hours is worse than reporting and moving on. *)
   let kill () =
-    (try Unix.kill child_pid terminate_signal
+    (try Unix.kill child_pid Sys.sigkill
      with Unix.Unix_error _ | Invalid_argument _ -> ());
     let deadline = Unix.gettimeofday () +. 5.0 in
     let rec wait () =
@@ -196,7 +190,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
      waitpid on. Send the platform terminate signal and poll
      is_process_alive briefly. *)
   let kill () =
-    (try Unix.kill pid terminate_signal
+    (try Unix.kill pid Sys.sigkill
      with Unix.Unix_error _ | Invalid_argument _ -> ());
     let deadline = Unix.gettimeofday () +. 2.0 in
     while is_process_alive pid && Unix.gettimeofday () < deadline do
