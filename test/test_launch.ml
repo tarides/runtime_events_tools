@@ -27,22 +27,17 @@ let process_launch () =
   Alcotest.(check bool)
     "process should launch" true
     (try
-       let a = Launch.exec_process config [ "./run_endlessly.exe" ] in
-       (* Check the child is alive using waitpid WNOHANG.
-          Unix.kill with signal 0 is not supported on Windows. *)
+       let a, kill = Launch.exec_process config [ "./run_endlessly.exe" ] in
        let launched = a.alive () in
        (* Clean up the child process so it doesn't leak.
           On Windows, open files cannot be deleted, so the orphan process
           would prevent dune from cleaning up its temp directory. *)
-       a.kill ();
+       kill ();
        a.close ();
        launched
-     with
-    (* Any exceptions indicate a failure to launch *)
-    | Unix.Unix_error (Unix.ENOENT, _, _) -> false
-    | _exn ->
-        Printf.printf "%s" (Printexc.to_string _exn);
-        false)
+     with _exn ->
+       Printf.eprintf "%s" (Printexc.to_string _exn);
+       false)
 
 let () =
   let open Alcotest in

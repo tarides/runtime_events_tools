@@ -1,8 +1,4 @@
 external is_process_alive : int -> bool = "olly_is_process_alive"
-
-(* On Windows, Unix.create_process_env returns a process HANDLE, not a PID.
-   This C stub calls GetProcessId(handle) on Windows to get the real PID.
-   On Unix it's the identity function since the handle IS the PID. *)
 external get_process_id : int -> int = "olly_get_process_id"
 
 let lost_events ring_id num =
@@ -13,10 +9,8 @@ type subprocess = {
   cursor : Runtime_events.cursor;
   close : unit -> unit;
   pid : int;
-  (* Terminate the process and wait for it to fully exit. Safe to call
-     more than once and safe to call after natural exit. *)
-  kill : unit -> unit;
 }
+
 
 type runtime_events_config = { log_wsize : int option; dir : string option }
 type exec_config = Attach of string * int | Execute of string list
@@ -24,8 +18,12 @@ type exec_config = Attach of string * int | Execute of string list
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
+(* Function to kill a spawned process. Only the spawner can terminate
+   the child. *)
+type kill = unit -> unit
+
 let exec_process (config : runtime_events_config) (args : string list) :
-    subprocess =
+    subprocess * kill =
   if not (List.length args > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
@@ -88,7 +86,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
   in
   let child_pid = get_process_id child_handle in
   (* OCaml's Unix module on Windows uses the value returned by
-     create_process (a HANDLE) as its process identifier — both Unix.kill
+     create_process (a HANDLE) as its process identifier, both Unix.kill
      and Unix.waitpid expect that value, NOT the real OS PID from
      GetProcessId. On Unix the handle and PID coincide.
 
@@ -160,7 +158,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
       try Unix.unlink ring_file with Unix.Unix_error _ -> ()
     end
   in
-  { alive; cursor; close; pid = child_pid; kill }
+  ({ alive; cursor; close; pid = child_pid }, kill)
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
@@ -187,25 +185,11 @@ let attach_process (dir : string) (pid : int) : subprocess =
   in
   let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
-  (* Best-effort: we did not create the process, so we have no handle.
-     On Unix this kills via SIGKILL. On Windows this is effectively a
-     no-op because OCaml's Unix.kill expects the value returned by
-     create_process (a HANDLE), not an arbitrary PID — terminating an
-     attached-to process there would need a Win32 OpenProcess +
-     TerminateProcess C stub. *)
-  let kill () =
-    (try Unix.kill pid Sys.sigkill
-     with Unix.Unix_error _ | Invalid_argument _ -> ());
-    let deadline = Unix.gettimeofday () +. 2.0 in
-    while is_process_alive pid && Unix.gettimeofday () < deadline do
-      Unix.sleepf 0.02
-    done
-  in
-  { alive; cursor; close; pid; kill }
+  { alive; cursor; close; pid }
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
-  | Execute argsl -> exec_process config argsl
+  | Execute argsl -> fst (exec_process config argsl)
   | Attach (dir, pid) -> attach_process dir pid
 
 let interrupted = Atomic.make false
