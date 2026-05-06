@@ -87,15 +87,16 @@ let exec_process (config : runtime_events_config) (args : string list) :
         (Fail (Printf.sprintf "executable %s not found" executable_filename))
   in
   let child_pid = get_process_id child_handle in
-  (* On Windows Unix.kill takes a PID (uses OpenProcess) but Unix.waitpid
-     takes the HANDLE returned by create_process — they are different
-     values. On Unix the handle and PID coincide.
+  (* OCaml's Unix module on Windows uses the value returned by
+     create_process (a HANDLE) as its process identifier — both Unix.kill
+     and Unix.waitpid expect that value, NOT the real OS PID from
+     GetProcessId. On Unix the handle and PID coincide.
 
      We poll waitpid with WNOHANG rather than blocking indefinitely: if
      the kill didn't take for any reason, hanging the test suite for
      hours is worse than reporting and moving on. *)
   let kill () =
-    (try Unix.kill child_pid Sys.sigkill
+    (try Unix.kill child_handle Sys.sigkill
      with Unix.Unix_error _ | Invalid_argument _ -> ());
     let deadline = Unix.gettimeofday () +. 5.0 in
     let rec wait () =
@@ -186,9 +187,12 @@ let attach_process (dir : string) (pid : int) : subprocess =
   in
   let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
-  (* Best-effort: we did not create the process, so we have no handle to
-     waitpid on. Send the platform terminate signal and poll
-     is_process_alive briefly. *)
+  (* Best-effort: we did not create the process, so we have no handle.
+     On Unix this kills via SIGKILL. On Windows this is effectively a
+     no-op because OCaml's Unix.kill expects the value returned by
+     create_process (a HANDLE), not an arbitrary PID — terminating an
+     attached-to process there would need a Win32 OpenProcess +
+     TerminateProcess C stub. *)
   let kill () =
     (try Unix.kill pid Sys.sigkill
      with Unix.Unix_error _ | Invalid_argument _ -> ());
