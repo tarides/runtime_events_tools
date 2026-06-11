@@ -79,6 +79,10 @@ Major Gen: 34 collections 0 forced collections
 Compactions: 0
 ```
 
+Note: if the GC pauses for longer than the histogram's highest bucket can record, the output will include a line of the form
+#[Beyond histogram (> 17179869 ms): 5 events, mean (ms): 19000000, max (ms): 20000000]
+In this case, mean and standard deviation results only apply to the histogram contents and do not include the outlier values. The max result does.
+
 ### Tracing a program
 
 `olly trace` will record the runtime trace log in

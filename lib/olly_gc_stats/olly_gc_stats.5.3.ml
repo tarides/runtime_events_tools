@@ -55,7 +55,7 @@ let print_per_domain_stats oc =
 let print_percentiles json output hist outliers =
   let outlier_mean_ms = outlier_mean_ms outliers in
   let mean_latency = mean_latency hist in
-  let max_latency = max_latency hist in
+  let max_latency = max_latency hist outliers in
   let percentiles =
     [|
       25.0;
@@ -153,10 +153,12 @@ let print_percentiles json output hist outliers =
       Buffer.contents buf
     in
     Printf.fprintf oc
-      {|{"version": 1, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "max_rss_kb": %d, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "major_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "domain_alloc_stats": {%s}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
+      {|{"version": 2, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "max_rss_kb": %d, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "outliers": {"count": %d, "mean_latency": %f, "max_latency": %f}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "major_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "domain_alloc_stats": {%s}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
       real_time !total_cpu_time total_gc_time gc_overhead
       (Olly_common.Max_rss.max_rss_kb rss_collector)
       domain_stats mean_latency stddev_latency min_latency max_latency distribs
+      outliers.count outlier_mean_ms
+      (float_of_int outliers.max |> ms)
       total_heap !minor_words !major_words !promoted_words promoted_pct
       domain_alloc_stats !minor_collections !major_collections
       !forced_major_collections !compactions
@@ -199,6 +201,13 @@ let print_percentiles json output hist outliers =
     Fun.flip Array.iter percentiles (fun p ->
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms));
+    if outliers.count > 0 then
+      Printf.fprintf oc
+        "#[Beyond histogram (> %.0f ms):\t%d events,\t mean (ms):\t%.2f,\t max \
+         (ms):\t%.2f]\n"
+        (float_of_int highest_trackable_value |> ms)
+        outliers.count outlier_mean_ms
+        (float_of_int outliers.max |> ms);
     Printf.fprintf oc "\n";
     print_global_allocation_stats oc;
     print_per_domain_stats oc;
@@ -210,10 +219,8 @@ let print_percentiles json output hist outliers =
 let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
     exec_args =
   let current_event = Hashtbl.create 13 in
-  let hist =
-    H.init ~lowest_discernible_value:10 ~highest_trackable_value:10_000_000_000
-      ~significant_figures:3
-  in
+  let hist = make_hist () in
+  let outliers = make_outliers () in
   let is_gc_phase phase =
     match phase with
     | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
@@ -250,7 +257,7 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
     | Some (saved_phase, saved_ts) when saved_phase = phase ->
         Hashtbl.remove current_event ring_id;
         let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        assert (H.record_value hist latency);
+        record_latency hist outliers latency;
         domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
     | _ -> ()
   in
@@ -276,7 +283,7 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
   in
 
   let init = Fun.id in
-  let cleanup () = print_percentiles json output hist in
+  let cleanup () = print_percentiles json output hist outliers in
   let on_poll = Olly_common.Max_rss.sample rss_collector in
   let open Olly_common.Launch in
   try
