@@ -1,7 +1,7 @@
 module Format = Olly_format_backend
 
-let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
-    runtime_events_log_wsize exec_args =
+let trace process_poller_sleep poll_sleep fmt trace_filename emit_counter
+    runtime_events_dir runtime_events_log_wsize exec_args =
   let open Format.Event in
   let tracer = Format.create fmt ~filename:trace_filename in
   let runtime_phase kind ring_id ts phase =
@@ -26,9 +26,7 @@ let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
   in
   let runtime_begin = runtime_phase SpanBegin
   and runtime_end = runtime_phase SpanEnd
-  and init () = ()
   and cleanup () = Format.close tracer
-  and on_launch = fun _ -> ()
   and extra = Olly_custom_events.v tracer
   and lifecycle _ _ _ _ = () in
   let open Olly_common.Launch in
@@ -39,9 +37,10 @@ let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
       runtime_counter;
       runtime_end;
       lifecycle;
-      init;
       cleanup;
-      on_launch;
+      on_success = (fun () -> ());
+      process_poller_sleep;
+      sample_rss = false;
       poll_sleep;
       runtime_events_dir;
       runtime_events_log_wsize;
@@ -90,5 +89,6 @@ let trace_cmd format_list =
   let info = Cmd.info "trace" ~doc ~sdocs ~man in
   Cmd.v info
     Term.(
-      const trace $ freq_option $ format_option $ trace_filename $ emit_counter
-      $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 1)
+      const trace $ proc_stat_freq_option $ freq_option $ format_option
+      $ trace_filename $ emit_counter $ runtime_events_dir
+      $ runtime_events_log_wsize $ exec_args 1)

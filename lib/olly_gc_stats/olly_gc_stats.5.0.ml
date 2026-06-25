@@ -82,7 +82,7 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc
       {|{"version": 2, "wall_time": %.2f, "cpu_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f, "max_rss_kb": %d, "domain_stats": {%s}, "mean_latency": %f, "stddev_latency": %f, "min_latency": %.2f, "max_latency": %f, "distr_latency": {%s}, "outliers": {"count": %d, "mean_latency": %f, "max_latency": %f}, "allocations": {"total_heap": %.0f, "minor_heap": %.0f, "promoted_words": %.0f, "promoted_pct": %.2f}, "collections": {"minor": %i, "major": %i, "forced_major": %i, "compactions": %i}}|}
       real_time !total_cpu_time total_gc_time gc_overhead
-      (Olly_common.Max_rss.max_rss_kb rss_collector)
+      (Olly_common.Process_poller.peak_rss ())
       domain_stats mean_latency stddev_latency min_latency max_latency distribs
       outliers.count outlier_mean_ms
       (float_of_int outliers.max |> ms)
@@ -96,7 +96,7 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n" gc_overhead;
     Printf.fprintf oc "Max RSS (kB):\t%d\n"
-      (Olly_common.Max_rss.max_rss_kb rss_collector);
+      (Olly_common.Process_poller.peak_rss ());
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
@@ -146,7 +146,7 @@ let print_percentiles json output hist outliers =
       !major_collections !forced_major_collections;
     Printf.fprintf oc "Compactions: %i\n" !compactions)
 
-let gc_stats poll_sleep rss_freq json output runtime_events_dir
+let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
     runtime_events_log_wsize exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
@@ -208,15 +208,8 @@ let gc_stats poll_sleep rss_freq json output runtime_events_dir
     | _ -> ()
   in
 
-  let init = Fun.id in
   let open Olly_common.Launch in
-  let on_launch (child : subprocess) =
-    Olly_common.Rss_poller.start ~pid:child.pid ~interval:rss_freq
-  in
-  let cleanup () =
-    Olly_common.Max_rss.set rss_collector (Olly_common.Rss_poller.stop ());
-    print_percentiles json output hist outliers
-  in
+  let on_success () = print_percentiles json output hist outliers in
   try
     `Ok
       (olly
@@ -226,9 +219,8 @@ let gc_stats poll_sleep rss_freq json output runtime_events_dir
            runtime_end;
            runtime_counter;
            lifecycle;
-           init;
-           cleanup;
-           on_launch;
+           on_success;
+           process_poller_sleep;
            poll_sleep;
            runtime_events_dir;
            runtime_events_log_wsize;

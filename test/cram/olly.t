@@ -79,6 +79,19 @@ Trace subcommand help:
              Size of the per-domain runtime events ring buffers in log powers
              of two words. Defaults to 16.
   
+         --proc-stat-freq=proc-stat-freq (absent=0.1)
+             Set the interval, in seconds, at which the process status and the
+             peak RSS of the monitored process are sampled. Sampling runs on a
+             dedicated domain, independently of --freq. The value must be
+             positive. On Linux, the kernel reports the peak RSS directly, so
+             the tracked value is monotonic and each sample can only raise it;
+             reducing the interval improves accuracy only for the final
+             iteration (between the peak and process exit). On OSX and FreeBSD,
+             the kernel reports only the current RSS, so the peak is
+             approximated as the maximum over samples; a shorter interval
+             lowers the chance of missing a transient peak at the cost of more
+             sampling overhead, a genuine accuracy/overhead tradeoff.
+  
   COMMON OPTIONS
          These options are common to all commands.
   
@@ -148,7 +161,7 @@ GC stats subcommand help:
          Max RSS
              Peak resident set size (in kB) of the child process, sampled
              during execution. The sampling interval is controlled by
-             --rss-freq and is independent of --freq.
+             --proc-stat-freq and is independent of --freq.
   
   ARGUMENTS
          EXECUTABLE
@@ -181,13 +194,18 @@ GC stats subcommand help:
              Redirect the output of `olly` to specified file. The output of the
              command is not redirected.
   
-         --rss-freq=rss-freq (absent=0.1)
-             Set the interval, in seconds, at which the peak RSS of the
-             monitored process is sampled. Sampling runs on a dedicated domain,
-             independently of --freq. The value must be positive. On Linux, the
-             tracked value is monotonic so reducing the interval improves
-             accuracy only within the last iteration. On OSX and FreeBSD, there
-             is a genuine accuracy/overhead tradeoff.
+         --proc-stat-freq=proc-stat-freq (absent=0.1)
+             Set the interval, in seconds, at which the process status and the
+             peak RSS of the monitored process are sampled. Sampling runs on a
+             dedicated domain, independently of --freq. The value must be
+             positive. On Linux, the kernel reports the peak RSS directly, so
+             the tracked value is monotonic and each sample can only raise it;
+             reducing the interval improves accuracy only for the final
+             iteration (between the peak and process exit). On OSX and FreeBSD,
+             the kernel reports only the current RSS, so the peak is
+             approximated as the maximum over samples; a shorter interval
+             lowers the chance of missing a transient peak at the cost of more
+             sampling overhead, a genuine accuracy/overhead tradeoff.
   
   COMMON OPTIONS
          These options are common to all commands.

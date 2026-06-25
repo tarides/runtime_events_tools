@@ -4,3 +4,15 @@
  (foreign_stubs
   (language c)
   (names process_utils max_rss_stubs)))
+
+(rule
+ (enabled_if
+  (>= %{ocaml_version} 5.1.0))
+ (action
+  (copy process_poller_5.1.ml process_poller.ml)))
+
+(rule
+ (enabled_if
+  (< %{ocaml_version} 5.1.0))
+ (action
+  (copy process_poller_5.0.ml process_poller.ml)))

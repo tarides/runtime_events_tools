@@ -26,7 +26,6 @@ let highest_trackable_value = 1 lsl 34
 
 (* Mutable stats *)
 let wall_time = { start_time = 0.; end_time = 0. }
-let rss_collector = Olly_common.Max_rss.create ()
 let domain_elapsed_times = Array.make number_domains 0.
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
@@ -167,8 +166,7 @@ let latency poll_sleep json output runtime_events_dir exec_args =
         record_latency hist outliers latency
     | _ -> ()
   in
-  let init = Fun.id in
-  let cleanup () = print_latency_only json output hist outliers in
+  let on_success () = print_latency_only json output hist outliers in
   let open Olly_common.Launch in
   try
     `Ok
@@ -177,8 +175,8 @@ let latency poll_sleep json output runtime_events_dir exec_args =
            empty_config with
            runtime_begin;
            runtime_end;
-           init;
-           cleanup;
+           on_success;
+           sample_rss = false;
            poll_sleep;
            runtime_events_dir;
          }
