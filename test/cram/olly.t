@@ -147,7 +147,8 @@ GC stats subcommand help:
   
          Max RSS
              Peak resident set size (in kB) of the child process, sampled
-             during execution.
+             during execution. The sampling interval is controlled by
+             --rss-freq and is independent of --freq.
   
   ARGUMENTS
          EXECUTABLE
@@ -179,6 +180,14 @@ GC stats subcommand help:
          -o output, --output=output
              Redirect the output of `olly` to specified file. The output of the
              command is not redirected.
+  
+         --rss-freq=rss-freq (absent=0.1)
+             Set the interval, in seconds, at which the peak RSS of the
+             monitored process is sampled. Sampling runs on a dedicated domain,
+             independently of --freq. The value must be positive. On Linux, the
+             tracked value is monotonic so reducing the interval improves
+             accuracy only within the last iteration. On OSX and FreeBSD, there
+             is a genuine accuracy/overhead tradeoff.
   
   COMMON OPTIONS
          These options are common to all commands.

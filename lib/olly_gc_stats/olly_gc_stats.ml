@@ -48,7 +48,8 @@ let gc_stats_cmd =
       `I
         ( "Max RSS",
           "Peak resident set size (in kB) of the child process, sampled during \
-           execution." );
+           execution. The sampling interval is controlled by $(b,--rss-freq) \
+           and is independent of $(b,--freq)." );
       `Blocks help_secs;
     ]
   in
@@ -59,8 +60,8 @@ let gc_stats_cmd =
     Term.(
       ret
         (const Olly_gc_impl.gc_stats
-        $ freq_option $ json_option $ output_option $ runtime_events_dir
-        $ runtime_events_log_wsize $ exec_args 0))
+        $ freq_option $ rss_freq_option $ json_option $ output_option
+        $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 0))
 
 let latency_cmd =
   let open Cmdliner in
