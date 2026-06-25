@@ -22,7 +22,9 @@ let make_hist () =
 (* Largest GC pause (in nanoseconds) the latency histogram can track. Pauses
    beyond this are summarised separately. This should be calculated through the hist implementation 
    and the concrete arguments in [make_hist] *)
-let highest_trackable_value = 2 lsl 34
+let highest_trackable_value = 1 lsl 34
+
+(* Mutable stats *)
 let wall_time = { start_time = 0.; end_time = 0. }
 let rss_collector = Olly_common.Max_rss.create ()
 let domain_elapsed_times = Array.make number_domains 0.
@@ -33,6 +35,8 @@ let minor_collections = ref 0
 let major_collections = ref 0
 let forced_major_collections = ref 0
 let compactions = ref 0
+
+(* conversions *)
 let to_sec x = float_of_int x /. 1_000_000_000.
 let ms ns = ns /. 1_000_000.
 let mean_latency hist = H.mean hist |> ms

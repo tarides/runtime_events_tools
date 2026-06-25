@@ -146,8 +146,8 @@ let print_percentiles json output hist outliers =
       !major_collections !forced_major_collections;
     Printf.fprintf oc "Compactions: %i\n" !compactions)
 
-let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
-    exec_args =
+let gc_stats poll_sleep rss_freq json output runtime_events_dir
+    runtime_events_log_wsize exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
@@ -209,9 +209,14 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
   in
 
   let init = Fun.id in
-  let cleanup () = print_percentiles json output hist outliers in
-  let on_poll = Olly_common.Max_rss.sample rss_collector in
   let open Olly_common.Launch in
+  let on_launch (child : subprocess) =
+    Olly_common.Rss_poller.start ~pid:child.pid ~interval:rss_freq
+  in
+  let cleanup () =
+    Olly_common.Max_rss.set rss_collector (Olly_common.Rss_poller.stop ());
+    print_percentiles json output hist outliers
+  in
   try
     `Ok
       (olly
@@ -223,7 +228,7 @@ let gc_stats poll_sleep json output runtime_events_dir runtime_events_log_wsize
            lifecycle;
            init;
            cleanup;
-           on_poll;
+           on_launch;
            poll_sleep;
            runtime_events_dir;
            runtime_events_log_wsize;

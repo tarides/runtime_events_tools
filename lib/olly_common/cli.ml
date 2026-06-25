@@ -1,5 +1,14 @@
 open Cmdliner
 
+let positive_float =
+  let parse s =
+    let f = Arg.Conv.parser Arg.float s in
+    Result.bind f (fun f ->
+        if f > 0.0 then Ok f
+        else Error (Printf.sprintf "%g is not a positive value" f))
+  in
+  Arg.Conv.of_conv ~parser:parse Arg.float
+
 let help_secs =
   [
     `S Manpage.s_common_options;
@@ -25,6 +34,20 @@ let freq_option =
     value
     & opt float 0.1 (* Poll at 10Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
+
+let rss_freq_option =
+  let doc =
+    "Set the interval, in seconds, at which the peak RSS of the monitored \
+     process is sampled. Sampling runs on a dedicated domain, independently of \
+     $(b,--freq). The value must be positive. On Linux, the tracked value is \
+     monotonic so reducing the interval improves accuracy only within the last \
+     iteration. On OSX and FreeBSD, there is a genuine accuracy/overhead \
+     tradeoff."
+  in
+  Arg.(
+    value
+    & opt positive_float 0.1 (* Sample at 10Hz by default. *)
+    & info [ "rss-freq" ] ~docv:"rss-freq" ~doc)
 
 let runtime_events_dir =
   let doc =
