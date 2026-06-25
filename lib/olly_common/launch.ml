@@ -1,7 +1,11 @@
 external is_process_alive : int -> bool = "olly_is_process_alive"
 
-let lost_events ring_id num =
-  Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
+let lost_events_count = ref 0
+
+let lost_events _ring_id num =
+  let sum = !lost_events_count + num in
+  (* detect overflow and stay at [max_int] *)
+  lost_events_count := if sum < 0 then max_int else sum
 
 type subprocess = {
   alive : unit -> bool;
@@ -193,7 +197,17 @@ let empty_config =
 
 let olly config exec_args =
   config.init ();
-  Fun.protect ~finally:config.cleanup (fun () ->
+  let finally () =
+    config.cleanup ();
+    if !lost_events_count > 0 then begin
+      Printf.eprintf "Lost %d events, stats not reliable%s\n%!"
+        !lost_events_count
+        (if !lost_events_count = max_int then
+           " (possible counter overflow detected)\n%!"
+         else "")
+    end
+  in
+  Fun.protect ~finally (fun () ->
       let runtime_config =
         {
           dir = config.runtime_events_dir;
