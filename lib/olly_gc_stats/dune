@@ -1,7 +1,16 @@
 (library
  (name olly_gc_stats)
  (optional)
- (libraries olly_common hdr_histogram))
+ (libraries olly_common hdr_histogram)
+ (foreign_stubs
+  (language c)
+  ; -g keeps DWARF symbols and -fno-omit-frame-pointer keeps frame pointers, so
+  ; sampling profilers can unwind through and name the native consumer's frames.
+  ; Both are negligible at runtime (FP costs a register; -g is zero-cost) and
+  ; this is a profiling tool, so they are always on.
+  (flags
+   (:standard -g -fno-omit-frame-pointer))
+  (names gc_counter_stubs)))
 
 (rule
  (deps olly_gc_stats.5.0.ml)

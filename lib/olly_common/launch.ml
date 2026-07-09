@@ -12,6 +12,7 @@ type subprocess = {
   cursor : Runtime_events.cursor;
   close : unit -> unit;
   pid : int;
+  dir : string;  (** resolved directory containing the .events file *)
 }
 
 type runtime_events_config = { log_wsize : int option; dir : string option }
@@ -108,7 +109,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
       Unix.unlink ring_file
     end
   in
-  { alive; cursor; close; pid = child_pid }
+  { alive; cursor; close; pid = child_pid; dir }
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
@@ -135,7 +136,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
   in
   let alive () = is_process_alive pid
   and close () = Runtime_events.free_cursor cursor in
-  { alive; cursor; close; pid }
+  { alive; cursor; close; pid; dir }
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
@@ -144,35 +145,50 @@ let launch_process config (exec_args : exec_config) : subprocess =
 
 let interrupted = Atomic.make false
 
-let collect_events poll_sleep child callbacks =
+let collect_events poll_sleep ~poll_cursor ~on_poll child callbacks =
   let old_handler =
     Sys.signal Sys.sigint
       (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
+  in
+  (* Consumers that do all their work natively in [on_poll] set
+     [poll_cursor = false] so we don't redundantly traverse the event stream
+     through the OCaml cursor as well. *)
+  let poll () =
+    if poll_cursor then
+      Runtime_events.read_poll child.cursor callbacks None |> ignore;
+    on_poll ()
   in
   Fun.protect
     ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
     (fun () ->
       (* Read from the child process *)
       while child.alive () && not (Atomic.get interrupted) do
-        Runtime_events.read_poll child.cursor callbacks None |> ignore;
+        poll ();
         if poll_sleep > 0.0 then
           try Unix.sleepf poll_sleep
           with Unix.Unix_error (Unix.EINTR, _, _) -> ()
       done;
       (* Do one more poll in case there are any remaining events we've missed *)
-      Runtime_events.read_poll child.cursor callbacks None |> ignore)
+      poll ())
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
 type consumer_config = {
   runtime_begin : (Runtime_events.runtime_phase -> unit) acceptor_fn;
   runtime_end : (Runtime_events.runtime_phase -> unit) acceptor_fn;
-  runtime_counter : (Runtime_events.runtime_counter -> int -> unit) acceptor_fn;
+  runtime_counter :
+    (Runtime_events.runtime_counter -> int -> unit) acceptor_fn option;
   lifecycle : (Runtime_events.lifecycle -> int option -> unit) acceptor_fn;
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
   init : unit -> unit;
   cleanup : unit -> unit;
   on_launch : subprocess -> unit;
+  (* Called after every [read_poll], for consumers that drive an additional
+     (e.g. native) cursor alongside the main one. *)
+  on_poll : unit -> unit;
+  (* When [false], the OCaml cursor is not polled (the consumer does all its
+     work in [on_poll]). Defaults to [true]. *)
+  poll_cursor : bool;
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
@@ -182,12 +198,14 @@ let empty_config =
   {
     runtime_begin = (fun _ _ _ -> ());
     runtime_end = (fun _ _ _ -> ());
-    runtime_counter = (fun _ _ _ _ -> ());
+    runtime_counter = None;
     lifecycle = (fun _ _ _ _ -> ());
     extra = Fun.id;
     init = (fun () -> ());
     cleanup = (fun () -> ());
     on_launch = (fun _ -> ());
+    on_poll = (fun () -> ());
+    poll_cursor = true;
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None;
     (* Use default tmp directory *)
@@ -228,8 +246,13 @@ let olly config exec_args =
             } =
               config
             in
+            (* When no counter callback is registered, [read_poll] skips counter
+               events with just a pointer advance instead of a full OCaml
+               dispatch. gc-stats relies on this and consumes counters natively
+               via [on_poll]. *)
             Runtime_events.Callbacks.create ~runtime_begin ~runtime_end
-              ~runtime_counter ~lifecycle ~lost_events ()
+              ?runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep child callbacks))
+          collect_events config.poll_sleep ~poll_cursor:config.poll_cursor
+            ~on_poll:config.on_poll child callbacks))
