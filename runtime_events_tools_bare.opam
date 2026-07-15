@@ -30,4 +30,3 @@ build: [
 ]
 dev-repo: "git+https://github.com/tarides/runtime_events_tools.git"
 x-maintenance-intent: ["(latest)"]
-available: os != "win32"

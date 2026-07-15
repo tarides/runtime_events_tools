@@ -18,7 +18,7 @@
  (maintenance_intent "(latest)")
  (depends
   (ocaml (>= "5.0.0~"))
-  hdr_histogram
+  (hdr_histogram (>= "0.0.5"))
   (cmdliner (>= 2.0.0))
   (trace-fuchsia (>= 0.11))
   (trace (>= 0.11))

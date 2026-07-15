@@ -1,4 +1,5 @@
 external is_process_alive : int -> bool = "olly_is_process_alive"
+external get_process_id : int -> int = "olly_get_process_id"
 
 let lost_events ring_id num =
   Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
@@ -16,8 +17,12 @@ type exec_config = Attach of string * int | Execute of string list
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
+(* Function to kill a spawned process. Only the spawner can terminate
+   the child. *)
+type kill = unit -> unit
+
 let exec_process (config : runtime_events_config) (args : string list) :
-    subprocess =
+    subprocess * kill =
   if not (List.length args > 0) then
     raise (Fail (Printf.sprintf "no executable provided for exec_process"));
 
@@ -70,7 +75,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
         base_env;
       ]
   in
-  let child_pid =
+  let child_handle =
     try
       Unix.create_process_env executable_filename (Array.of_list args) env
         Unix.stdin Unix.stdout Unix.stderr
@@ -78,17 +83,65 @@ let exec_process (config : runtime_events_config) (args : string list) :
       raise
         (Fail (Printf.sprintf "executable %s not found" executable_filename))
   in
-  Unix.sleepf 0.1;
+  let child_pid = get_process_id child_handle in
+  (* OCaml's Unix module on Windows uses the value returned by
+     create_process (a HANDLE) as its process identifier, both Unix.kill
+     and Unix.waitpid expect that value, NOT the real OS PID from
+     GetProcessId. On Unix the handle and PID coincide.
+
+     We poll waitpid with WNOHANG rather than blocking indefinitely: if
+     the kill didn't take for any reason, hanging the test suite for
+     hours is worse than reporting and moving on. *)
+  let kill () =
+    (try Unix.kill child_handle Sys.sigkill
+     with Unix.Unix_error _ | Invalid_argument _ -> ());
+    let deadline = Unix.gettimeofday () +. 5.0 in
+    let rec wait () =
+      if Unix.gettimeofday () >= deadline then ()
+      else
+        match Unix.waitpid [ Unix.WNOHANG ] child_handle with
+        | 0, _ ->
+            Unix.sleepf 0.02;
+            wait ()
+        | _, _ -> ()
+        | exception Unix.Unix_error _ -> ()
+    in
+    wait ()
+  in
+  (* Poll until we can create a cursor for the child's ring buffer.
+     The OCaml runtime creates the .events file then initializes it,
+     so we retry create_cursor rather than just checking file existence.
+     Under load (e.g. parallel dune builds) process creation can be slow. *)
+  let timeout = 5.0 in
+  let poll_interval = 0.05 in
+  let deadline = Unix.gettimeofday () +. timeout in
   let cursor =
-    try Runtime_events.create_cursor (Some (dir, child_pid))
-    with Failure str ->
-      (* Provide some context for which directory was passed to create_cursor *)
-      failwith (str ^ " Directory: " ^ dir)
+    let last_exn = ref None in
+    let result = ref None in
+    while !result = None && Unix.gettimeofday () < deadline do
+      try result := Some (Runtime_events.create_cursor (Some (dir, child_pid)))
+      with Failure _ as exn ->
+        last_exn := Some exn;
+        Unix.sleepf poll_interval
+    done;
+    match !result with
+    | Some c -> c
+    | None ->
+        (* Clean up the child process before failing — otherwise it becomes
+           an orphan. On Windows, orphan processes hold .events files open
+           and prevent dune from cleaning up its temp directory. *)
+        kill ();
+        let msg =
+          match !last_exn with
+          | Some (Failure str) -> str ^ " Directory: " ^ dir
+          | _ -> "Timed out waiting for runtime events. Directory: " ^ dir
+        in
+        failwith msg
   in
   let alive () =
-    match Unix.waitpid [ Unix.WNOHANG ] child_pid with
+    match Unix.waitpid [ Unix.WNOHANG ] child_handle with
     | 0, _ -> true
-    | p, _ when p = child_pid -> false
+    | p, _ when p = child_handle -> false
     | _, _ -> assert false
     | exception Unix.Unix_error (Unix.EINTR, _, _) -> true
   and close () =
@@ -101,10 +154,10 @@ let exec_process (config : runtime_events_config) (args : string list) :
       let ring_file =
         Filename.concat dir (string_of_int child_pid ^ ".events")
       in
-      Unix.unlink ring_file
+      try Unix.unlink ring_file with Unix.Unix_error _ -> ()
     end
   in
-  { alive; cursor; close; pid = child_pid }
+  ({ alive; cursor; close; pid = child_pid }, kill)
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
@@ -135,7 +188,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
-  | Execute argsl -> exec_process config argsl
+  | Execute argsl -> fst (exec_process config argsl)
   | Attach (dir, pid) -> attach_process dir pid
 
 let interrupted = Atomic.make false
@@ -151,13 +204,20 @@ let collect_events poll_sleep ~on_poll child callbacks =
       (* Read from the child process *)
       while child.alive () && not (Atomic.get interrupted) do
         on_poll child.pid;
-        Runtime_events.read_poll child.cursor callbacks None |> ignore;
+        (try Runtime_events.read_poll child.cursor callbacks None |> ignore
+         with Failure _ ->
+           (* The child may have exited between the alive check and read_poll,
+              leaving the ring buffer in a partially-written state. *)
+           ());
         if poll_sleep > 0.0 then
           try Unix.sleepf poll_sleep
           with Unix.Unix_error (Unix.EINTR, _, _) -> ()
       done;
-      (* Do one more poll in case there are any remaining events we've missed *)
-      Runtime_events.read_poll child.cursor callbacks None |> ignore)
+      (* Do one more poll in case there are any remaining events we've missed.
+         After the child exits, the ring buffer may be in an inconsistent state
+         so we tolerate read failures here. *)
+      try Runtime_events.read_poll child.cursor callbacks None |> ignore
+      with Failure _ -> ())
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
