@@ -1,6 +1,8 @@
 ### Unreleased
 
 ### 0.5.3
+* Record and don't crash on latencies above histogram threshold (#93, @ngorogiannis)
+* Extract common code between gc stats implementations for OCaml 5.0 and 5.3 (#93, @ngorogiannis)
 * Reinstate olly latency command. (#86, @tmcgilchrist)
 * Avoid overriding the user's OCAMLRUNPARAM settings. (#83, @gasche)
 * Remove help subcommand, as it relies on cmdliner internals. (#81, @theAlexes)
