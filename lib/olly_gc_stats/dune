@@ -18,3 +18,21 @@
   (>= %{ocaml_version} 5.3))
  (action
   (copy %{deps} %{target})))
+
+(rule
+ (deps gc_counters_shim.5.3.ml)
+ (target gc_counters_shim.ml)
+ (enabled_if
+  (and
+   (>= %{ocaml_version} 5.3)
+   (< %{ocaml_version} 5.5)))
+ (action
+  (copy %{deps} %{target})))
+
+(rule
+ (deps gc_counters_shim.5.5.ml)
+ (target gc_counters_shim.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.5))
+ (action
+  (copy %{deps} %{target})))
