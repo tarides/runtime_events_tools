@@ -1,7 +1,11 @@
 external is_process_alive : int -> bool = "olly_is_process_alive"
 
-let lost_events ring_id num =
-  Printf.eprintf "[ring_id=%d] Lost %d events\n%!" ring_id num
+let lost_events_count = ref 0
+
+let lost_events _ring_id num =
+  let sum = !lost_events_count + num in
+  (* detect overflow and stay at [max_int] *)
+  lost_events_count := if sum < 0 then max_int else sum
 
 type subprocess = {
   alive : unit -> bool;
@@ -140,7 +144,7 @@ let launch_process config (exec_args : exec_config) : subprocess =
 
 let interrupted = Atomic.make false
 
-let collect_events poll_sleep ~on_poll child callbacks =
+let collect_events poll_sleep child callbacks =
   let old_handler =
     Sys.signal Sys.sigint
       (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
@@ -150,7 +154,6 @@ let collect_events poll_sleep ~on_poll child callbacks =
     (fun () ->
       (* Read from the child process *)
       while child.alive () && not (Atomic.get interrupted) do
-        on_poll child.pid;
         Runtime_events.read_poll child.cursor callbacks None |> ignore;
         if poll_sleep > 0.0 then
           try Unix.sleepf poll_sleep
@@ -169,7 +172,7 @@ type consumer_config = {
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
   init : unit -> unit;
   cleanup : unit -> unit;
-  on_poll : int -> unit;
+  on_launch : subprocess -> unit;
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
@@ -184,7 +187,7 @@ let empty_config =
     extra = Fun.id;
     init = (fun () -> ());
     cleanup = (fun () -> ());
-    on_poll = (fun _ -> ());
+    on_launch = (fun _ -> ());
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None;
     (* Use default tmp directory *)
@@ -194,7 +197,17 @@ let empty_config =
 
 let olly config exec_args =
   config.init ();
-  Fun.protect ~finally:config.cleanup (fun () ->
+  let finally () =
+    config.cleanup ();
+    if !lost_events_count > 0 then begin
+      Printf.eprintf "Lost %d events, stats not reliable%s\n%!"
+        !lost_events_count
+        (if !lost_events_count = max_int then
+           " (possible counter overflow detected)\n%!"
+         else "")
+    end
+  in
+  Fun.protect ~finally (fun () ->
       let runtime_config =
         {
           dir = config.runtime_events_dir;
@@ -203,6 +216,7 @@ let olly config exec_args =
       in
       let child = launch_process runtime_config exec_args in
       Fun.protect ~finally:child.close (fun () ->
+          config.on_launch child;
           let callbacks =
             let {
               runtime_begin;
@@ -218,5 +232,4 @@ let olly config exec_args =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep ~on_poll:config.on_poll child
-            callbacks))
+          collect_events config.poll_sleep child callbacks))

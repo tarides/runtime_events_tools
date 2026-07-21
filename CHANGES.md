@@ -1,6 +1,8 @@
 ### Unreleased
 
 ### 0.5.3
+* Report lost events count only at end of run (#96, @ngorogiannis)
+* Sample max RSS usage from a dedicated domain (#95, @ngorogiannis)
 * Record and don't crash on latencies above histogram threshold (#93, @ngorogiannis)
 * Extract common code between gc stats implementations for OCaml 5.0 and 5.3 (#93, @ngorogiannis)
 * Reinstate olly latency command. (#86, @tmcgilchrist)
