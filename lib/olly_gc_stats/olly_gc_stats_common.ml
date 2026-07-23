@@ -57,6 +57,32 @@ let record_latency hist outliers latency =
     outliers.total <- outliers.total + latency;
     if latency > outliers.max then outliers.max <- latency)
 
+(* When events were dropped, print a per-ring breakdown of events consumed vs
+   lost. This shows whether the load (and the loss) is spread across rings —
+   in which case sharding the consumer across threads would help — or
+   concentrated, and how large the drain deficit is per ring. *)
+let report_drops () =
+  let total_lost = Gc_counter.lost_events () in
+  if total_lost > 0 then begin
+    Printf.eprintf "[Olly] Lost %d events, stats not reliable\n" total_lost;
+    Printf.eprintf "[Olly] Per-ring events (consumed / lost / loss%%):\n";
+    let total_consumed = ref 0 in
+    for i = 0 to number_domains - 1 do
+      let consumed = Gc_counter.events i in
+      let lost = Gc_counter.lost_per_domain i in
+      total_consumed := !total_consumed + consumed;
+      if consumed > 0 || lost > 0 then
+        Printf.eprintf "[Olly]   ring %3d: %12d / %12d / %5.1f%%\n" i consumed
+          lost
+          (100. *. float_of_int lost /. float_of_int (consumed + lost))
+    done;
+    Printf.eprintf "[Olly]   total:    %12d / %12d / %5.1f%%\n" !total_consumed
+      total_lost
+      (100. *. float_of_int total_lost
+      /. float_of_int (!total_consumed + total_lost));
+    flush stderr
+  end
+
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
   match lifecycle_event with

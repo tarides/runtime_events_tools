@@ -52,10 +52,20 @@ let print_per_domain_stats oc =
     |> Array.combine domain_major_words);
   print_table oc !data
 
-let print_percentiles json output hist outliers =
-  let outlier_mean_ms = outlier_mean_ms outliers in
-  let mean_latency = mean_latency hist in
-  let max_latency = max_latency hist outliers in
+let print_percentiles json output =
+  let to_sec x = float_of_int x /. 1_000_000_000. in
+  let ms ns = ns /. 1_000_000. in
+  let outliers_count = Gc_counter.outliers_count () in
+  let outliers_max = Gc_counter.outliers_max () in
+  let outlier_mean_ms =
+    if outliers_count = 0 then 0.
+    else
+      float_of_int (Gc_counter.outliers_total ()) /. float_of_int outliers_count
+      |> ms
+  in
+
+  let mean_latency = Gc_counter.hist_mean () |> ms
+  and max_latency = float_of_int (Gc_counter.hist_max ()) |> ms in
   let percentiles =
     [|
       25.0;
@@ -93,8 +103,8 @@ let print_percentiles json output hist outliers =
     ap;
 
   let gc_overhead = total_gc_time /. !total_cpu_time *. 100. in
-  let stddev_latency = H.stddev hist |> ms in
-  let min_latency = float_of_int (H.min hist) |> ms in
+  let stddev_latency = Gc_counter.hist_stddev () |> ms in
+  let min_latency = float_of_int (Gc_counter.hist_min ()) |> ms in
   let minor_words = ref 0.0 in
   let major_words = ref 0.0 in
   let promoted_words = ref 0.0 in
@@ -113,7 +123,7 @@ let print_percentiles json output hist outliers =
       List.init (Array.length percentiles) (fun i ->
           let percentile = percentiles.(i) in
           let value =
-            H.value_at_percentile hist percentiles.(i)
+            Gc_counter.hist_value_at_percentile percentiles.(i)
             |> float_of_int |> ms |> string_of_float
           in
           Printf.sprintf "\"%.4f\": %s" percentile value)
@@ -157,8 +167,8 @@ let print_percentiles json output hist outliers =
       real_time !total_cpu_time total_gc_time gc_overhead
       (Olly_common.Max_rss.max_rss_kb rss_collector)
       domain_stats mean_latency stddev_latency min_latency max_latency distribs
-      outliers.count outlier_mean_ms
-      (float_of_int outliers.max |> ms)
+      outliers_count outlier_mean_ms
+      (float_of_int outliers_max |> ms)
       total_heap !minor_words !major_words !promoted_words promoted_pct
       domain_alloc_stats !minor_collections !major_collections
       !forced_major_collections !compactions
@@ -200,14 +210,14 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "Percentile \t Latency (ms)\n";
     Fun.flip Array.iter percentiles (fun p ->
         Printf.fprintf oc "%.4f \t %.2f\n" p
-          (float_of_int (H.value_at_percentile hist p) |> ms));
-    if outliers.count > 0 then
+          (float_of_int (Gc_counter.hist_value_at_percentile p) |> ms));
+    if outliers_count > 0 then
       Printf.fprintf oc
         "#[Beyond histogram (> %.0f ms):\t%d events,\t mean (ms):\t%.2f,\t max \
          (ms):\t%.2f]\n"
         (float_of_int highest_trackable_value |> ms)
-        outliers.count outlier_mean_ms
-        (float_of_int outliers.max |> ms);
+        outliers_count outlier_mean_ms
+        (float_of_int outliers_max |> ms);
     Printf.fprintf oc "\n";
     print_global_allocation_stats oc;
     print_per_domain_stats oc;
@@ -216,56 +226,29 @@ let print_percentiles json output hist outliers =
       !major_collections !forced_major_collections;
     Printf.fprintf oc "Compactions: %i\n" !compactions)
 
+(* Copy the natively-accumulated state out of [Gc_counter] into the per-domain
+   arrays and counters used by the reporting code above. *)
+let collect_native_stats () =
+  for i = 0 to number_domains - 1 do
+    domain_minor_words.(i) <- Gc_counter.minor_words i;
+    domain_promoted_words.(i) <- Gc_counter.promoted_words i;
+    domain_major_words.(i) <- Gc_counter.major_words i;
+    domain_gc_times.(i) <- Gc_counter.gc_time i;
+    domain_elapsed_times.(i) <- Gc_counter.domain_elapsed i
+  done;
+  wall_time.start_time <- Gc_counter.wall_start ();
+  wall_time.end_time <- Gc_counter.wall_end ();
+  minor_collections := Gc_counter.minor_collections ();
+  major_collections := Gc_counter.major_collections ();
+  forced_major_collections := Gc_counter.forced_major_collections ();
+  compactions := Gc_counter.compactions ()
+
 let gc_stats poll_sleep rss_freq json output runtime_events_dir
     runtime_events_log_wsize exec_args =
-  let current_event = Hashtbl.create 13 in
-  let hist = make_hist () in
-  let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
-  let runtime_begin ring_id ts phase =
-    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT && ring_id == 0 then
-      incr compactions;
-
-    if phase == Runtime_events.EV_MINOR && ring_id == 0 then
-      incr minor_collections;
-
-    (* Runtime_events.EV_MAJOR seems to correspond to any GC collection,
-       be more specific and use stop-the-world phase done at the end of
-       a major GC cycle *)
-    if phase == Runtime_events.EV_MAJOR_GC_STW && ring_id == 0 then
-      incr major_collections;
-
-    if
-      (phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
-      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR)
-      && ring_id == 0
-    then incr forced_major_collections;
-
-    if is_gc_phase phase then
-      match Hashtbl.find_opt current_event ring_id with
-      | None -> Hashtbl.add current_event ring_id (phase, Ts.to_int64 ts)
-      | _ -> ()
-  in
-  let runtime_end ring_id ts phase =
-    match Hashtbl.find_opt current_event ring_id with
-    | Some (saved_phase, saved_ts) when saved_phase = phase ->
-        Hashtbl.remove current_event ring_id;
-        let latency = Int64.to_int (Int64.sub (Ts.to_int64 ts) saved_ts) in
-        record_latency hist outliers latency;
-        domain_gc_times.(ring_id) <- domain_gc_times.(ring_id) + latency
-    | _ -> ()
-  in
-  let runtime_counter =
-    Gc_counters_shim.runtime_counter ~domain_minor_words ~domain_promoted_words
-      ~domain_major_words
-  in
-
+  (* All event processing happens natively in [Gc_counter] (see
+     gc_counter_stubs.c) to avoid the per-event OCaml callback dispatch that
+     otherwise bottlenecks the consumer on bursty workloads. The OCaml cursor is
+     not polled ([poll_cursor = false]); results are read out at cleanup. *)
   let init = Fun.id in
   let open Olly_common.Launch in
   let on_launch (child : subprocess) =
@@ -273,20 +256,18 @@ let gc_stats poll_sleep rss_freq json output runtime_events_dir
   in
   let cleanup () =
     Olly_common.Max_rss.set rss_collector (Olly_common.Rss_poller.stop ());
-    print_percentiles json output hist outliers
+    print_percentiles json output
   in
   try
     `Ok
       (olly
          {
            empty_config with
-           runtime_begin;
-           runtime_end;
-           runtime_counter;
-           lifecycle;
            init;
            cleanup;
            on_launch;
+           on_poll = (fun () -> ignore (Gc_counter.poll ()));
+           poll_cursor = false;
            poll_sleep;
            runtime_events_dir;
            runtime_events_log_wsize;

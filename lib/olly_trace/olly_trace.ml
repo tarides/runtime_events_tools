@@ -26,22 +26,19 @@ let trace poll_sleep fmt trace_filename emit_counter runtime_events_dir
   in
   let runtime_begin = runtime_phase SpanBegin
   and runtime_end = runtime_phase SpanEnd
-  and init () = ()
   and cleanup () = Format.close tracer
-  and on_launch = fun _ -> ()
   and extra = Olly_custom_events.v tracer
   and lifecycle _ _ _ _ = () in
   let open Olly_common.Launch in
   olly
     {
+      empty_config with
       extra;
       runtime_begin;
-      runtime_counter;
+      runtime_counter = Some runtime_counter;
       runtime_end;
       lifecycle;
-      init;
       cleanup;
-      on_launch;
       poll_sleep;
       runtime_events_dir;
       runtime_events_log_wsize;
