@@ -1,6 +1,8 @@
 ### Unreleased
 
 ### 0.5.3
+* Check process status from a dedicated domain (#100, @ngorogiannis)
+* gc-stats no longer prints a (zeroed) stats block when the run fails; it now reports only the error (#100, @ngorogiannis)
 * Report lost events count only at end of run (#96, @ngorogiannis)
 * Sample max RSS usage from a dedicated domain (#95, @ngorogiannis)
 * Record and don't crash on latencies above histogram threshold (#93, @ngorogiannis)

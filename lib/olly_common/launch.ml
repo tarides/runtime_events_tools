@@ -89,13 +89,20 @@ let exec_process (config : runtime_events_config) (args : string list) :
       (* Provide some context for which directory was passed to create_cursor *)
       failwith (str ^ " Directory: " ^ dir)
   in
+  (* used to avoid double reaping, which raises an exception other than ECHILD on windows *)
+  let reaped = Atomic.make false in
   let alive () =
     match Unix.waitpid [ Unix.WNOHANG ] child_pid with
     | 0, _ -> true
-    | p, _ when p = child_pid -> false
+    | p, _ when p = child_pid ->
+        Atomic.set reaped true;
+        false
     | _, _ -> assert false
     | exception Unix.Unix_error (Unix.EINTR, _, _) -> true
   and close () =
+    (if not @@ Atomic.get reaped then
+       try Unix.waitpid [ WNOHANG ] child_pid |> ignore
+       with Unix.Unix_error (Unix.ECHILD, _, _) -> ());
     Runtime_events.free_cursor cursor;
     (* We need to remove the ring buffers ourselves because we told
        the child process not to remove them. However, if the user
@@ -144,7 +151,7 @@ let launch_process config (exec_args : exec_config) : subprocess =
 
 let interrupted = Atomic.make false
 
-let collect_events poll_sleep child callbacks =
+let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
   let old_handler =
     Sys.signal Sys.sigint
       (Sys.Signal_handle (fun _ -> Atomic.set interrupted true))
@@ -152,15 +159,18 @@ let collect_events poll_sleep child callbacks =
   Fun.protect
     ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
     (fun () ->
-      (* Read from the child process *)
-      while child.alive () && not (Atomic.get interrupted) do
-        Runtime_events.read_poll child.cursor callbacks None |> ignore;
-        if poll_sleep > 0.0 then
-          try Unix.sleepf poll_sleep
-          with Unix.Unix_error (Unix.EINTR, _, _) -> ()
-      done;
-      (* Do one more poll in case there are any remaining events we've missed *)
-      Runtime_events.read_poll child.cursor callbacks None |> ignore)
+      Process_poller.start ~alive_check:child.alive ~pid:child.pid
+        ~interval:process_poller_sleep ~sample_rss;
+      Fun.protect ~finally:Process_poller.stop (fun () ->
+          (* Read from the child process *)
+          while Process_poller.is_alive () && not (Atomic.get interrupted) do
+            Runtime_events.read_poll child.cursor callbacks None |> ignore;
+            if poll_sleep > 0.0 then
+              try Unix.sleepf poll_sleep
+              with Unix.Unix_error (Unix.EINTR, _, _) -> ()
+          done;
+          (* Do one more poll in case there are any remaining events we've missed *)
+          Runtime_events.read_poll child.cursor callbacks None |> ignore))
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
@@ -170,9 +180,10 @@ type consumer_config = {
   runtime_counter : (Runtime_events.runtime_counter -> int -> unit) acceptor_fn;
   lifecycle : (Runtime_events.lifecycle -> int option -> unit) acceptor_fn;
   extra : Runtime_events.Callbacks.t -> Runtime_events.Callbacks.t;
-  init : unit -> unit;
   cleanup : unit -> unit;
-  on_launch : subprocess -> unit;
+  on_success : unit -> unit;
+  process_poller_sleep : float;
+  sample_rss : bool;
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
@@ -185,9 +196,10 @@ let empty_config =
     runtime_counter = (fun _ _ _ _ -> ());
     lifecycle = (fun _ _ _ _ -> ());
     extra = Fun.id;
-    init = (fun () -> ());
     cleanup = (fun () -> ());
-    on_launch = (fun _ -> ());
+    on_success = (fun _ -> ());
+    process_poller_sleep = 0.1;
+    sample_rss = true;
     poll_sleep = 0.1 (* Poll at 10Hz *);
     runtime_events_dir = None;
     (* Use default tmp directory *)
@@ -196,7 +208,6 @@ let empty_config =
   }
 
 let olly config exec_args =
-  config.init ();
   let finally () =
     config.cleanup ();
     if !lost_events_count > 0 then begin
@@ -216,7 +227,6 @@ let olly config exec_args =
       in
       let child = launch_process runtime_config exec_args in
       Fun.protect ~finally:child.close (fun () ->
-          config.on_launch child;
           let callbacks =
             let {
               runtime_begin;
@@ -232,4 +242,6 @@ let olly config exec_args =
               ~runtime_counter ~lifecycle ~lost_events ()
             |> extra
           in
-          collect_events config.poll_sleep child callbacks))
+          collect_events ~sample_rss:config.sample_rss
+            config.process_poller_sleep config.poll_sleep child callbacks;
+          config.on_success ()))

@@ -35,19 +35,23 @@ let freq_option =
     & opt float 0.1 (* Poll at 10Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
 
-let rss_freq_option =
+let proc_stat_freq_option =
   let doc =
-    "Set the interval, in seconds, at which the peak RSS of the monitored \
-     process is sampled. Sampling runs on a dedicated domain, independently of \
-     $(b,--freq). The value must be positive. On Linux, the tracked value is \
-     monotonic so reducing the interval improves accuracy only within the last \
-     iteration. On OSX and FreeBSD, there is a genuine accuracy/overhead \
-     tradeoff."
+    "Set the interval, in seconds, at which the process status and the peak \
+     RSS of the monitored process are sampled. Sampling runs on a dedicated \
+     domain, independently of $(b,--freq). The value must be positive. On \
+     Linux, the kernel reports the peak RSS directly, so the tracked value is \
+     monotonic and each sample can only raise it; reducing the interval \
+     improves accuracy only for the final iteration (between the peak and \
+     process exit). On OSX and FreeBSD, the kernel reports only the current \
+     RSS, so the peak is approximated as the maximum over samples; a shorter \
+     interval lowers the chance of missing a transient peak at the cost of \
+     more sampling overhead, a genuine accuracy/overhead tradeoff."
   in
   Arg.(
     value
     & opt positive_float 0.1 (* Sample at 10Hz by default. *)
-    & info [ "rss-freq" ] ~docv:"rss-freq" ~doc)
+    & info [ "proc-stat-freq" ] ~docv:"proc-stat-freq" ~doc)
 
 let runtime_events_dir =
   let doc =
