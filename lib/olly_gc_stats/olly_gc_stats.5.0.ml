@@ -110,7 +110,7 @@ let print_percentiles json output hist outliers =
     "forced_major": %i,       
     "compactions": %i
   },       
-  "stats-reliable": %b
+  "stats_reliable": %b
 }|}
       real_time !total_cpu_time total_gc_time gc_overhead
       (Olly_common.Max_rss.max_rss_kb rss_collector)
