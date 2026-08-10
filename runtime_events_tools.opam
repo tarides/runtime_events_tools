@@ -16,6 +16,7 @@ depends: [
   "trace" {>= "0.11"}
   "menhir" {with-test}
   "ocamlformat" {with-dev-setup & = "0.28.1"}
+  "yojson" {with-test & >= "2.0"}
   "alcotest" {with-test & >= "1.9.0"}
   "odoc" {with-doc}
 ]

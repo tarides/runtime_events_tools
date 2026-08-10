@@ -24,6 +24,7 @@
   (trace (>= 0.11))
   (menhir :with-test)
   (ocamlformat (and :with-dev-setup (= 0.28.1)))
+  (yojson (and :with-test (>= 2.0)))
   (alcotest (and :with-test (>= 1.9.0)))))
 
 (package
