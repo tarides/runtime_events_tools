@@ -79,6 +79,8 @@ let print_percentiles json output hist outliers =
         (Array.combine domain_elapsed_times domain_gc_times);
       Buffer.contents buf
     in
+    (* Key set matches the 5.3 backend. Fields this runtime cannot report
+       are null. *)
     Printf.fprintf oc
       {|{       
   "version": 2,       
@@ -101,9 +103,11 @@ let print_percentiles json output hist outliers =
   "allocations": {       
     "total_heap": %.0f,       
     "minor_heap": %.0f,       
+    "major_heap": null,       
     "promoted_words": %.0f,       
     "promoted_pct": %.2f
   },       
+  "domain_alloc_stats": null,       
   "collections": {       
     "minor": %i,       
     "major": %i,       
