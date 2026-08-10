@@ -101,7 +101,7 @@ let print_percentiles json output hist outliers =
     "max_latency": %f
   },       
   "allocations": {       
-    "total_heap": %.0f,       
+    "total_heap": null,       
     "minor_heap": %.0f,       
     "major_heap": null,       
     "promoted_words": %.0f,       
@@ -121,7 +121,7 @@ let print_percentiles json output hist outliers =
       domain_stats mean_latency stddev_latency min_latency max_latency distribs
       outliers.count outlier_mean_ms
       (float_of_int outliers.max |> ms)
-      total_heap !minor_words !promoted_words promoted_pct !minor_collections
+      !minor_words !promoted_words promoted_pct !minor_collections
       !major_collections !forced_major_collections !compactions
       (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
   else (
