@@ -23,7 +23,7 @@ let print_global_allocation_stats oc =
   Printf.fprintf oc "\n"
 
 let print_per_domain_stats oc =
-  Printf.fprintf oc "Per domain stats: \n";
+  Printf.fprintf oc "Per domain allocations:\n";
   let data =
     ref [ [ "Domain"; "Total"; "Minor"; "Promoted"; "Major"; "Promoted(%)" ] ]
   in
@@ -205,7 +205,7 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "Max RSS (kB):\t%d\n"
       (Olly_common.Max_rss.max_rss_kb rss_collector);
     Printf.fprintf oc "\n";
-    Printf.fprintf oc "Per domain stats:\n";
+    Printf.fprintf oc "Per domain time:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
     Array.iteri
       (fun i (c, g) ->

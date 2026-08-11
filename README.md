@@ -38,55 +38,55 @@ output and omitted from the human-readable output.
 ```bash
 $ olly gc-stats './test_gc_stats.exe 18' # Use quotes for commands with arguments
 Execution times:
-Wall time (s):	0.52
-CPU time (s):	1.47
-GC time (s):	0.62
-GC overhead (% of CPU time):	41.98%
-Max RSS (kB):	65840
+Wall time (s):	0.54
+CPU time (s):	1.52
+GC time (s):	0.65
+GC overhead (% of CPU time):	42.91%
+Max RSS (kB):	64448
 
-Per domain stats:
+Per domain time:
 Domain   Wall   GC(s)   GC(%)  
-0        0.52   0.24    45.12  
-1        0.49   0.21    42.19  
-2        0.46   0.17    38.17  
+0        0.54   0.24    43.79  
+1        0.48   0.20    40.98  
+2        0.51   0.22    43.80  
 
 GC latency profile:
-#[Mean (ms):	0.23,	 Stddev (ms):	0.53]
-#[Min (ms):	0.00,	 max (ms):	4.71]
+#[Mean (ms):	0.24,	 Stddev (ms):	0.53]
+#[Min (ms):	0.00,	 max (ms):	4.14]
 
 Percentile 	 Latency (ms)
 25.0000 	 0.00
 50.0000 	 0.01
-60.0000 	 0.01
+60.0000 	 0.02
 70.0000 	 0.05
-75.0000 	 0.13
-80.0000 	 0.24
-85.0000 	 0.55
-90.0000 	 0.89
-95.0000 	 1.29
-96.0000 	 1.39
-97.0000 	 1.51
-98.0000 	 2.11
-99.0000 	 2.74
-99.9000 	 3.57
-99.9900 	 4.71
-99.9990 	 4.71
-99.9999 	 4.71
-100.0000 	 4.71
+75.0000 	 0.14
+80.0000 	 0.28
+85.0000 	 0.58
+90.0000 	 0.98
+95.0000 	 1.31
+96.0000 	 1.38
+97.0000 	 1.56
+98.0000 	 2.25
+99.0000 	 2.72
+99.9000 	 3.35
+99.9900 	 4.14
+99.9990 	 4.14
+99.9999 	 4.14
+100.0000 	 4.14
 
 GC allocations (in words): 
-Total heap:	 295711855
-Minor heap:	 301109826
-Major heap:	 45017730
-Promoted words:	 50415701 (16.74%)
+Total heap:	 296241054
+Minor heap:	 301205191
+Major heap:	 46112581
+Promoted words:	 51076718 (16.96%)
 
-Per domain stats: 
-Domain   Total      Minor       Promoted   Major      Promoted(%)  
-0        99721155   101879432   18727340   16569063   18.38        
-1        97590020   99615197    16072386   14047209   16.13        
-2        98400680   99615197    15615975   14401458   15.68        
-Minor Gen: 461 collections
-Major Gen: 40 collections 0 forced collections
+Per domain allocations:
+Domain   Total       Minor       Promoted   Major      Promoted(%)  
+0        100222337   101974797   17913651   16161191   17.57        
+1        97996796    99615197    16575682   14957281   16.64        
+2        98021921    99615197    16587385   14994109   16.65        
+Minor Gen: 467 collections
+Major Gen: 41 collections 0 forced collections
 Compactions: 0
 ```
 
