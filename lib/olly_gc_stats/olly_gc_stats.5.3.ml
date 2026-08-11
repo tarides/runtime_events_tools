@@ -14,7 +14,6 @@ let print_global_allocation_stats oc =
       promoted_words :=
         !promoted_words +. float_of_int domain_promoted_words.(i))
     domain_minor_words;
-  Printf.fprintf oc "Total heap:\t %.0f\n" (!minor_words -. !promoted_words);
   Printf.fprintf oc "Total heap:\t %.0f\n"
     (!minor_words -. !promoted_words +. !major_words);
   Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
