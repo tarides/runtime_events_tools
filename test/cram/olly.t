@@ -59,7 +59,11 @@ Trace subcommand help:
              combined with EXECUTABLE.
   
          -c, --emit-counters
-             Emit runtime counter events.
+             Emit runtime counter events. All counters defined by the OCaml
+             runtime in use are emitted, so the set varies by OCaml version.
+             See https://ocaml.org/manual/runtime-tracing.html and
+             https://ocaml.org/manual/latest/api/Runtime_events.html for what
+             each counter measures.
   
          -d dir, --dir=dir
              Sets the directory where the .events files containing the runtime

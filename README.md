@@ -91,6 +91,13 @@ or
 [Chrome tracing format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview)
 . The trace format can be specified with the `--format` option, with the default being Fuchsia trace format.
 
+Passing `--emit-counters` additionally records the runtime's counter events,
+such as major heap occupancy and GC pacing. Every counter defined by the OCaml
+runtime in use is emitted, so the set varies by OCaml version; see the
+[runtime tracing](https://ocaml.org/manual/runtime-tracing.html) documentation
+and the [`Runtime_events`](https://ocaml.org/manual/latest/api/Runtime_events.html)
+API reference for what each one measures.
+
 ```bash
 $ olly trace --format=fuchsia menhir_sysver.trace 'menhir -v --table sysver.mly' # Fuchsia trace format
 <snip>
