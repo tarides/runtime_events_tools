@@ -51,7 +51,6 @@ let print_percentiles json output hist outliers =
       promoted_words :=
         !promoted_words +. float_of_int domain_promoted_words.(i))
     domain_minor_words;
-  let total_heap = !minor_words -. !promoted_words in
   let promoted_pct = !promoted_words /. !minor_words *. 100.0 in
 
   if json then
@@ -172,7 +171,6 @@ let print_percentiles json output hist outliers =
         (float_of_int outliers.max |> ms);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC allocations (in words): \n";
-    Printf.fprintf oc "Total heap:\t %.0f\n" total_heap;
     Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
     Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
       promoted_pct;
