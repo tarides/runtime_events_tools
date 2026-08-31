@@ -4,6 +4,16 @@
  (name test_gc_stats)
  (modules test_gc_stats))
 
+; Regression test: explicit GC calls from a non-main domain must be counted.
+; Requires 5.2, which is where the compactor landed and Gc.compact became
+; more than a no-op.
+
+(executable
+ (name test_explicit_gc)
+ (modules test_explicit_gc)
+ (enabled_if
+  (>= %{ocaml_version} 5.2.0)))
+
 (executable
  (name test_fib)
  (modules test_fib)
@@ -88,3 +98,17 @@
  (deps run_endlessly.exe)
  (action
   (run %{test} --show-errors)))
+
+(test
+ (name test_gc_counters)
+ (modules test_gc_counters)
+ (package runtime_events_tools)
+ (enabled_if
+  (>= %{ocaml_version} 5.2.0))
+ (libraries alcotest unix yojson)
+ (deps %{bin:olly} test_explicit_gc.exe)
+ (action
+  (setenv
+   OLLY_BIN
+   %{bin:olly}
+   (run %{test} --show-errors))))

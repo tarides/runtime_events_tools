@@ -190,23 +190,31 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
         true
     | _ -> false
   in
+  (* The collection counters fall into two groups, which need different
+     treatment.
+
+     [EV_MINOR] and [EV_MAJOR_GC_STW] mark global stop-the-world points, so
+     every live domain emits them once per cycle. Counting a single domain
+     index therefore yields the number of cycles rather than a per-domain
+     sum, and index 0 is the one to count because the main domain outlives
+     the others.
+
+     The [EV_EXPLICIT_GC_*] phases span a call to [Gc.compact], [Gc.major]
+     or [Gc.full_major] and are emitted only on the domain that made the
+     call, which need not be the main one. They must be counted on every
+     index or they are silently dropped. *)
   let runtime_begin ring_id ts phase =
-    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT && ring_id == 0 then
-      incr compactions;
+    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT then incr compactions;
 
     if phase == Runtime_events.EV_MINOR && ring_id == 0 then
       incr minor_collections;
 
-    (* Runtime_events.EV_MAJOR seems to correspond to any GC collection,
-       be more specific and use stop-the-world phase done at the end of
-       a major GC cycle *)
     if phase == Runtime_events.EV_MAJOR_GC_STW && ring_id == 0 then
       incr major_collections;
 
     if
-      (phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
-      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR)
-      && ring_id == 0
+      phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
+      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR
     then incr forced_major_collections;
 
     if is_gc_phase phase then
