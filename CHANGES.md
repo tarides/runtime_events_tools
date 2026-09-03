@@ -1,4 +1,6 @@
 ### Unreleased
+* Document what `--emit-counters` emits, linking to the runtime tracing manual
+  and the `Runtime_events` API reference (#123, @tmcgilchrist)
 * Check process status from a dedicated domain (#100, @ngorogiannis)
 * gc-stats no longer prints a (zeroed) stats block when the run fails; it now reports only the error (#100, @ngorogiannis)
 * Wait for the traced process to initialise its ring buffers (@ngorogiannis)
