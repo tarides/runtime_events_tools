@@ -1,7 +1,7 @@
 (library
  (name olly_common)
  (libraries runtime_events unix cmdliner)
- (modules cli launch process_poller sys_backport)
+ (modules cli launch platform process_poller sys_backport)
  (foreign_stubs
   (language c)
   (names process_utils max_rss_stubs)))
