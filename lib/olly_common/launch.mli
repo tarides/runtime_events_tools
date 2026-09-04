@@ -10,6 +10,9 @@ type subprocess = {
   close : unit -> unit;
   origin : origin;
   pid : int;
+  (* Path to the process's ring buffer file. The poller needs it to tell the
+     ring's resident pages apart from the program's own memory. *)
+  ring_file : string;
 }
 
 type runtime_events_config = { log_wsize : int option; dir : string option }

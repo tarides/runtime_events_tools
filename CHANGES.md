@@ -1,4 +1,6 @@
 ### Unreleased
+* Exclude the runtime events ring buffer from the max RSS reported by
+  `gc-stats`, on macOS (#104, @ngorogiannis)
 * Report lost words, not events (#126, @ngorogiannis) 
 * Count explicit GC calls (`Gc.compact`, `Gc.major`, `Gc.full_major`) made by any
   domain, not just the main one (#115, @ngorogiannis)

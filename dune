@@ -1,0 +1,16 @@
+; The C stubs are split across platform #if arms (see
+; lib/olly_common/max_rss_stubs.c), where a bad edit can detach an arm and
+; leave the wrong platform's code compiled in. That fails at runtime rather
+; than at build time, and the only diagnostic is an unused-function warning
+; for the code that got orphaned — so promote that class to an error.
+;
+; Dev profile only: opam builds with --profile release, and a released
+; package should not break on whatever warning a future compiler invents.
+
+(env
+ (dev
+  (c_flags
+   (:standard
+    -Wall
+    -Werror=unused-function
+    -Werror=implicit-function-declaration))))
