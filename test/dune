@@ -74,6 +74,10 @@
  (modules run_exit))
 
 (executables
+ (names run_alloc)
+ (modules run_alloc))
+
+(executables
  (names run_crash)
  (modules run_crash)
  (libraries unix))

@@ -81,7 +81,7 @@ let print_percentiles json output hist outliers =
     in
     Printf.fprintf oc
       {|{       
-  "version": 2,       
+  "version": 3,       
   "wall_time": %.2f,       
   "cpu_time": %.2f,       
   "gc_time": %.2f,       
@@ -110,7 +110,8 @@ let print_percentiles json output hist outliers =
     "forced_major": %i,       
     "compactions": %i
   },       
-  "stats_reliable": %b
+  "stats_reliable": %b,       
+  "max_rss_excludes_ring": %b
 }|}
       real_time !total_cpu_time total_gc_time gc_overhead
       (Olly_common.Process_poller.peak_rss ())
@@ -120,6 +121,7 @@ let print_percentiles json output hist outliers =
       total_heap !minor_words !promoted_words promoted_pct !minor_collections
       !major_collections !forced_major_collections !compactions
       (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
+      (Olly_common.Process_poller.peak_rss_excludes_ring ())
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
@@ -127,8 +129,10 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "CPU time (s):\t%.2f\n" !total_cpu_time;
     Printf.fprintf oc "GC time (s):\t%.2f\n" total_gc_time;
     Printf.fprintf oc "GC overhead (%% of CPU time):\t%.2f%%\n" gc_overhead;
-    Printf.fprintf oc "Max RSS (kB):\t%d\n"
-      (Olly_common.Process_poller.peak_rss ());
+    Printf.fprintf oc "Max RSS (kB):\t%d%s\n"
+      (Olly_common.Process_poller.peak_rss ())
+      (if Olly_common.Process_poller.peak_rss_excludes_ring () then ""
+       else "\t(includes the runtime events ring buffer)");
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
