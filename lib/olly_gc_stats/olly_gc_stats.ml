@@ -49,7 +49,13 @@ let gc_stats_cmd =
         ( "Max RSS",
           "Peak resident set size (in kB) of the child process, sampled during \
            execution. The sampling interval is controlled by \
-           $(b,--proc-stat-freq) and is independent of $(b,--freq)." );
+           $(b,--proc-stat-freq) and is independent of $(b,--freq). The \
+           runtime events ring buffer is mapped into the child, and is \
+           routinely much larger than the program's own live memory, so its \
+           resident pages are excluded from this figure where the platform \
+           permits it. Currently that is macOS only; elsewhere the figure \
+           still includes the ring, which the human-readable output says and \
+           the json output reports as $(b,max_rss_excludes_ring)." );
       `Blocks help_secs;
     ]
   in

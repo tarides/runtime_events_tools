@@ -27,5 +27,6 @@ val terminate_and_reap : handle -> bool
     given time bound: on Windows [TerminateProcess] can fail, and until the
     child dies it keeps the ring file mapped. *)
 
-val get_rss_kb : pid:int -> int
-(** Peak resident set size; 0 where unsupported, which includes Windows. *)
+val get_rss_and_ring_kb : pid:int -> ring_file:string -> int * int
+(** Peak resident set size (0 where unsupported) and resident size of the ring
+    file (-1 where unsupported). *)
