@@ -1,5 +1,3 @@
-external get_rss_kb : int -> int = "olly_get_rss_kb"
-
 type t = {
   stop_flag : bool Atomic.t;
   domain : unit Domain.t;
@@ -31,7 +29,8 @@ let start ~alive_check ~pid ~interval ~sample_rss =
       Atomic.set alive still_alive;
       if still_alive then (
         if sample_rss then
-          Atomic.set peak_rss (max (get_rss_kb pid) (Atomic.get peak_rss));
+          Atomic.set peak_rss
+            (max (Platform.get_rss_kb ~pid) (Atomic.get peak_rss));
         sleep_at_least stop_flag interval;
         start_loop ()))
   in

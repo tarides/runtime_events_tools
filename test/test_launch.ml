@@ -23,12 +23,10 @@ let process_launch () =
   Alcotest.(check bool)
     "process should launch" true
     (try
-       let a = Launch.exec_process config [ "./run_endlessly.exe" ] in
-       try
-         (* Sending signal Zero to kill checks the process exists for Unix. *)
-         Unix.kill a.pid 0;
-         true
-       with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+       let child = Launch.exec_process config [ "./run_endlessly.exe" ] in
+       (* [close] terminates it: left running, it would outlive the test and
+          hold the inherited stdout open, hanging whoever reads it (dune). *)
+       Fun.protect ~finally:child.close (fun () -> child.alive ())
      with
     (* Any exceptions indicate a failure to launch *)
     | Unix.Unix_error (Unix.ENOENT, _, _) -> false
@@ -49,11 +47,7 @@ let process_launch_slow_start () =
     Launch.exec_process config
       [ "/bin/sh"; "-c"; "sleep 0.5; exec ./run_endlessly.exe" ]
   in
-  Fun.protect
-    ~finally:(fun () ->
-      (try Unix.kill child.pid Sys.sigkill with Unix.Unix_error _ -> ());
-      child.close ())
-    (fun () ->
+  Fun.protect ~finally:child.close (fun () ->
       Alcotest.(check bool)
         "process with a slow start should be traced" true (child.alive ()))
 
