@@ -48,6 +48,8 @@ type exec_config = Attach of string * int | Execute of string list
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
+let fail msg = raise (Fail msg)
+
 (* How long to wait for a freshly launched child to initialise its ring
    buffers, and how often to check in the meantime.
 
@@ -143,7 +145,7 @@ let str_of_status status =
 let exec_process (config : runtime_events_config) (args : string list) :
     subprocess =
   if not (List.length args > 0) then
-    raise (Fail (Printf.sprintf "no executable provided for exec_process"));
+    fail @@ Printf.sprintf "no executable provided for exec_process";
 
   let executable_filename = List.hd args in
 
@@ -153,9 +155,9 @@ let exec_process (config : runtime_events_config) (args : string list) :
     | Some path -> Unix.realpath path
   in
   if not @@ Sys.file_exists dir then
-    raise (Fail (Printf.sprintf "directory %s does not exist" dir));
+    fail @@ Printf.sprintf "directory %s does not exist" dir;
   if not @@ Sys.is_directory dir then
-    raise (Fail (Printf.sprintf "file %s is not a directory" dir));
+    fail @@ Printf.sprintf "file %s is not a directory" dir;
 
   let overridden_vars =
     "OCAML_RUNTIME_EVENTS_START" :: "OCAML_RUNTIME_EVENTS_DIR"
@@ -268,7 +270,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
   if not (Platform.is_process_alive ~pid) then
-    raise (Fail (Printf.sprintf "process %d does not exist" pid));
+    fail @@ Printf.sprintf "process %d does not exist" pid;
   (* Check the events file exists and is readable *)
   let ring_file = ring_file_of_pid dir pid in
   if not (Sys.file_exists ring_file) then
@@ -286,7 +288,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
              ring_file)));
   let cursor =
     try Runtime_events.create_cursor (Some (dir, pid))
-    with Failure str -> raise (Fail (str ^ " Directory: " ^ dir))
+    with Failure str -> fail (str ^ " Directory: " ^ dir)
   in
   let alive () = Platform.is_process_alive ~pid
   and close () = Runtime_events.free_cursor cursor in
@@ -392,5 +394,4 @@ let olly config exec_args =
       exit_status child
       |> Option.iter @@ function
          | Unix.WEXITED 0 -> ()
-         | status ->
-             raise (Fail (Printf.sprintf "Child %s" @@ str_of_status status)))
+         | status -> fail @@ Printf.sprintf "Child %s" @@ str_of_status status)
