@@ -51,7 +51,6 @@ let print_percentiles json output hist outliers =
       promoted_words :=
         !promoted_words +. float_of_int domain_promoted_words.(i))
     domain_minor_words;
-  let total_heap = !minor_words -. !promoted_words in
   let promoted_pct = !promoted_words /. !minor_words *. 100.0 in
 
   if json then
@@ -79,6 +78,8 @@ let print_percentiles json output hist outliers =
         (Array.combine domain_elapsed_times domain_gc_times);
       Buffer.contents buf
     in
+    (* Key set matches the 5.3 backend. Fields this runtime cannot report
+       are null. *)
     Printf.fprintf oc
       {|{       
   "version": 2,       
@@ -99,11 +100,13 @@ let print_percentiles json output hist outliers =
     "max_latency": %f
   },       
   "allocations": {       
-    "total_heap": %.0f,       
+    "total_heap": null,       
     "minor_heap": %.0f,       
+    "major_heap": null,       
     "promoted_words": %.0f,       
     "promoted_pct": %.2f
   },       
+  "domain_alloc_stats": null,       
   "collections": {       
     "minor": %i,       
     "major": %i,       
@@ -117,7 +120,7 @@ let print_percentiles json output hist outliers =
       domain_stats mean_latency stddev_latency min_latency max_latency distribs
       outliers.count outlier_mean_ms
       (float_of_int outliers.max |> ms)
-      total_heap !minor_words !promoted_words promoted_pct !minor_collections
+      !minor_words !promoted_words promoted_pct !minor_collections
       !major_collections !forced_major_collections !compactions
       (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
   else (
@@ -130,7 +133,7 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "Max RSS (kB):\t%d\n"
       (Olly_common.Process_poller.peak_rss ());
     Printf.fprintf oc "\n";
-    Printf.fprintf oc "Per domain stats:\n";
+    Printf.fprintf oc "Per domain time:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in
     Array.iteri
       (fun i (c, g) ->
@@ -168,7 +171,6 @@ let print_percentiles json output hist outliers =
         (float_of_int outliers.max |> ms);
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC allocations (in words): \n";
-    Printf.fprintf oc "Total heap:\t %.0f\n" total_heap;
     Printf.fprintf oc "Minor heap:\t %.0f\n" !minor_words;
     Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
       promoted_pct;
