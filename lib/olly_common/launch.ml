@@ -199,9 +199,15 @@ let exec_process (config : runtime_events_config) (args : string list) :
       try
         Platform.create_process_env executable_filename (Array.of_list args) env
           Unix.stdin Unix.stdout Unix.stderr
-      with Unix.Unix_error (Unix.ENOENT, _, _) ->
-        raise
-          (Fail (Printf.sprintf "executable %s not found" executable_filename))
+      with
+      | Unix.Unix_error (Unix.ENOENT, _, _) ->
+          raise
+            (Fail (Printf.sprintf "executable %s not found" executable_filename))
+      | Unix.Unix_error (err, fn, _) ->
+          raise
+            (Fail
+               (Printf.sprintf "cannot execute %s: %s: %s" executable_filename
+                  fn (Unix.error_message err)))
     in
     let pid =
       try Platform.pid_of_handle handle

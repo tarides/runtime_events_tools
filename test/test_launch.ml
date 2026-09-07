@@ -8,8 +8,10 @@ let process_launch_failure () =
     (fun () -> ignore (Launch.exec_process config [ "missing.exe" ]));
 
   match_raises "non-executable should not launch"
-    (* File for exec_process is not an executable *)
-    (function Unix.Unix_error (Unix.EACCES, _, _) -> true | _exn -> false)
+    (* File for exec_process is not an executable. The errno differs across
+       platforms (EACCES on Unix, ENOEXEC on Windows), but [exec_process]
+       reports either as [Fail]. *)
+    (function Launch.Fail _ -> true | _exn -> false)
     (fun () -> ignore (Launch.exec_process config [ "./run_endlessly.ml" ]));
 
   match_raises "empty executable string should not launch"
