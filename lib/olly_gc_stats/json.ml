@@ -1,4 +1,12 @@
-let number_format = format_of_string "%f"
+(** Default %.17g from Jsont results in very long numbers, because it is likely
+    it'll end with .999. %f defaults to 6 fractional digits. Although this may
+    be OK for latencies (which are measured in ms), it may be desirable to have
+    higher precision for wall-time and gc-time (measured in s).
+
+    Timestamps are measured in nanoseconds, so we shouldn't have more precision
+    than that. Wall time and GC time is output in seconds, whereas latencies in
+    milliseconds. *)
+let number_format = format_of_string "%.9g"
 
 let print oc jsont t =
   let wr = Bytesrw.Bytes.Writer.of_out_channel oc in
