@@ -57,7 +57,7 @@ let process_launch_slow_start () =
       [| "OCAML_RUNTIME_EVENTS_DIR=" ^ dir; "OCAML_RUNTIME_EVENTS_PRESERVE=1" |]
       (Unix.environment () |> Array.to_seq
       |> Seq.filter (fun entry ->
-             not (String.starts_with ~prefix:"OCAML_RUNTIME_EVENTS_" entry))
+          not (String.starts_with ~prefix:"OCAML_RUNTIME_EVENTS_" entry))
       |> Array.of_seq)
   in
   let launched = Unix.gettimeofday () in
