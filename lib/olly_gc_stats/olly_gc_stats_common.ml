@@ -114,19 +114,17 @@ let print_latency_only json output hist outliers =
   let oc = match output with Some s -> open_out s | None -> stderr in
 
   if json then
-    let distribs =
-      List.init (Array.length percentiles) (fun i ->
-          let percentile = percentiles.(i) in
+    let distr_latency =
+      percentiles |> Array.to_seq
+      |> Seq.map (fun percentile ->
           let value =
-            H.value_at_percentile hist percentiles.(i)
-            |> float_of_int |> ms |> string_of_float
+            H.value_at_percentile hist percentile |> float_of_int |> ms
           in
-          Printf.sprintf "\"%.4f\": %s" percentile value)
-      |> String.concat ","
+          (Printf.sprintf "%.4f" percentile, value))
+      |> List.of_seq
     in
-    Printf.fprintf oc
-      {|{"mean_latency": %f, "max_latency": %f, "distr_latency": {%s}}|}
-      mean_latency max_latency distribs
+    Json.Latency.{ mean_latency; max_latency; distr_latency }
+    |> Json.print oc Json.Latency.jsont
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "GC latency profile:\n";
