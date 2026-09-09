@@ -17,14 +17,14 @@ let close trace =
   Printf.fprintf trace.file "]";
   close_out trace.file
 
-let ts_to_us ts = Int64.(div ts (of_int 1000))
+let ts_to_us ts = Int64.(to_float ts /. 1000.)
 
 let write_json trace evt ph args =
   let open Event in
   array_elt_begin trace;
   Printf.fprintf trace.file
-    "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"%s\", \"ts\":%Ld, \"pid\": \
-     %d, \"tid\": %d%t}\n"
+    "{\"name\": \"%s\", \"cat\": \"PERF\", \"ph\":\"%s\", \"ts\":%.3f, \
+     \"pid\": %d, \"tid\": %d%t}\n"
     evt.name ph (ts_to_us evt.ts) evt.ring_id evt.ring_id
     (match args with
     | None -> ignore
