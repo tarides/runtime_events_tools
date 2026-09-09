@@ -1,7 +1,14 @@
 (library
  (name olly_gc_stats)
  (optional)
- (libraries olly_common hdr_histogram))
+ ; only neeed during development by 'dune build @lint'
+ ; not required for building if you haven't changed
+ ; the source code
+ (lint
+  (per_module
+   ((pps ppx_deriving_jsont)
+    json)))
+ (libraries olly_common hdr_histogram jsont jsont.bytesrw))
 
 (rule
  (deps olly_gc_stats.5.0.ml)
