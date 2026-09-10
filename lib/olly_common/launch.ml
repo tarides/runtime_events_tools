@@ -107,23 +107,21 @@ let create_cursor_when_ready ~dir ~pid ~(handle : Platform.handle) ~executable =
       | exception Failure msg -> retry (Some msg)
   and retry last_error =
     if child_exited () then
-      raise
-        (Fail
-           (Printf.sprintf
-              "%s exited before initialising its runtime events ring buffer \
-               %s. Was it built with OCaml 5.0 or later?"
-              executable ring_file))
+      fail
+        (Printf.sprintf
+           "%s exited before initialising its runtime events ring buffer %s. \
+            Was it built with OCaml 5.0 or later?"
+           executable ring_file)
     else if Unix.gettimeofday () >= deadline then begin
       (* We cannot monitor the child and are about to bail out, so do not
          leave it running behind us. *)
       ignore (Platform.terminate_and_reap handle);
-      raise
-        (Fail
-           (Printf.sprintf
-              "gave up after %.1fs waiting for %s to initialise its runtime \
-               events ring buffer %s.%s Was it built with OCaml 5.0 or later?"
-              ring_wait_timeout executable ring_file
-              (match last_error with None -> "" | Some msg -> " " ^ msg)))
+      fail
+        (Printf.sprintf
+           "gave up after %.1fs waiting for %s to initialise its runtime \
+            events ring buffer %s.%s Was it built with OCaml 5.0 or later?"
+           ring_wait_timeout executable ring_file
+           (match last_error with None -> "" | Some msg -> " " ^ msg))
     end
     else begin
       (try Unix.sleepf ring_wait_interval

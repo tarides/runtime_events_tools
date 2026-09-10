@@ -1,0 +1,5 @@
+# olly reads a child's ring buffer through an out-of-process cursor, which
+# cannot be created at all on Windows before OCaml 5.3: the consumer built the
+# path with a UTF-8 string and a wide format string, and so looked for a
+# garbled file name. Fixed by ocaml/ocaml#13089.
+conflicts: [ "ocaml" {os = "win32" & < "5.3"} ]
