@@ -7,15 +7,28 @@ type t = {
 
 let poller : t option Atomic.t = Atomic.make None
 
-let rec sleep_at_least stop_flag interval =
-  if interval > 0.0 then
-    let start_time = Unix.gettimeofday () in
-    try Unix.sleepf interval
-    with Unix.Unix_error (Unix.EINTR, _, _) ->
-      if not @@ Atomic.get stop_flag then
-        let elapsed = Unix.gettimeofday () -. start_time in
-        sleep_at_least stop_flag (interval -. elapsed)
+(* [sleep_at_least stop_flag interval] sleeps for [interval] seconds, in subdivisions 
+    of [stop_check_interval] seconds. For each [stop_check_interval], [stop_flag] is 
+    consulted, and if true, an early return is triggered. *)
+let stop_check_interval = 0.05
 
+let sleep_at_least stop_flag interval =
+  let deadline = Unix.gettimeofday () +. interval in
+  let rec sleep_until_deadline () =
+    let remaining = deadline -. Unix.gettimeofday () in
+    if remaining > 0.0 && not (Atomic.get stop_flag) then (
+      (try Unix.sleepf (Float.min remaining stop_check_interval)
+       with Unix.Unix_error (Unix.EINTR, _, _) -> ());
+      sleep_until_deadline ())
+  in
+  sleep_until_deadline ()
+
+(* Waking the domain immediately could be done with a self-pipe, and on Windows 
+  that has to be a [socketpair], since [select] there accepts none but sockets. OCaml
+  emulates [socketpair] on Windows via an AF_UNIX socket at a path from GetTempFileName 
+  and then deleted. Therefore, two olly processes sharing the temp directory can race 
+  for the same path. That path must also fit in sun_path, 108 bytes, which is too low
+  for many systems. This is why [sleep_at_least] is used instead. *)
 let start ~alive_check ~pid ~interval ~sample_rss =
   if Option.is_some (Atomic.get poller) then
     failwith "Process poller already started";
@@ -31,6 +44,7 @@ let start ~alive_check ~pid ~interval ~sample_rss =
         if sample_rss then
           Atomic.set peak_rss
             (max (Platform.get_rss_kb ~pid) (Atomic.get peak_rss));
+        (* wait for [interval], or until signalled to stop *)
         sleep_at_least stop_flag interval;
         start_loop ()))
   in
