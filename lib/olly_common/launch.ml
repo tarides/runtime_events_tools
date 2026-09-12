@@ -31,6 +31,9 @@ type subprocess = {
   close : unit -> unit;
   origin : origin;
   pid : int;
+  (* Path to the process's ring buffer file. The poller needs it to tell the
+     ring's resident pages apart from the program's own memory. *)
+  ring_file : string;
 }
 
 (* The child's own exit status, once it has been collected. [None] means "not
@@ -47,6 +50,8 @@ type exec_config = Attach of string * int | Execute of string list
 
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
+
+let fail msg = raise (Fail msg)
 
 (* How long to wait for a freshly launched child to initialise its ring
    buffers, and how often to check in the meantime.
@@ -105,23 +110,21 @@ let create_cursor_when_ready ~dir ~pid ~(handle : Platform.handle) ~executable =
       | exception Failure msg -> retry (Some msg)
   and retry last_error =
     if child_exited () then
-      raise
-        (Fail
-           (Printf.sprintf
-              "%s exited before initialising its runtime events ring buffer \
-               %s. Was it built with OCaml 5.0 or later?"
-              executable ring_file))
+      fail
+        (Printf.sprintf
+           "%s exited before initialising its runtime events ring buffer %s. \
+            Was it built with OCaml 5.0 or later?"
+           executable ring_file)
     else if Unix.gettimeofday () >= deadline then begin
       (* We cannot monitor the child and are about to bail out, so do not
          leave it running behind us. *)
       ignore (Platform.terminate_and_reap handle);
-      raise
-        (Fail
-           (Printf.sprintf
-              "gave up after %.1fs waiting for %s to initialise its runtime \
-               events ring buffer %s.%s Was it built with OCaml 5.0 or later?"
-              ring_wait_timeout executable ring_file
-              (match last_error with None -> "" | Some msg -> " " ^ msg)))
+      fail
+        (Printf.sprintf
+           "gave up after %.1fs waiting for %s to initialise its runtime \
+            events ring buffer %s.%s Was it built with OCaml 5.0 or later?"
+           ring_wait_timeout executable ring_file
+           (match last_error with None -> "" | Some msg -> " " ^ msg))
     end
     else begin
       (try Unix.sleepf ring_wait_interval
@@ -143,7 +146,7 @@ let str_of_status status =
 let exec_process (config : runtime_events_config) (args : string list) :
     subprocess =
   if not (List.length args > 0) then
-    raise (Fail (Printf.sprintf "no executable provided for exec_process"));
+    fail @@ Printf.sprintf "no executable provided for exec_process";
 
   let executable_filename = List.hd args in
 
@@ -153,9 +156,9 @@ let exec_process (config : runtime_events_config) (args : string list) :
     | Some path -> Unix.realpath path
   in
   if not @@ Sys.file_exists dir then
-    raise (Fail (Printf.sprintf "directory %s does not exist" dir));
+    fail @@ Printf.sprintf "directory %s does not exist" dir;
   if not @@ Sys.is_directory dir then
-    raise (Fail (Printf.sprintf "file %s is not a directory" dir));
+    fail @@ Printf.sprintf "file %s is not a directory" dir;
 
   let overridden_vars =
     "OCAML_RUNTIME_EVENTS_START" :: "OCAML_RUNTIME_EVENTS_DIR"
@@ -199,9 +202,15 @@ let exec_process (config : runtime_events_config) (args : string list) :
       try
         Platform.create_process_env executable_filename (Array.of_list args) env
           Unix.stdin Unix.stdout Unix.stderr
-      with Unix.Unix_error (Unix.ENOENT, _, _) ->
-        raise
-          (Fail (Printf.sprintf "executable %s not found" executable_filename))
+      with
+      | Unix.Unix_error (Unix.ENOENT, _, _) ->
+          raise
+            (Fail (Printf.sprintf "executable %s not found" executable_filename))
+      | Unix.Unix_error (err, fn, _) ->
+          raise
+            (Fail
+               (Printf.sprintf "cannot execute %s: %s: %s" executable_filename
+                  fn (Unix.error_message err)))
     in
     let pid =
       try Platform.pid_of_handle handle
@@ -219,6 +228,7 @@ let exec_process (config : runtime_events_config) (args : string list) :
   in
   (* used to avoid double reaping, which raises an exception other than ECHILD on windows *)
   let reaped = Atomic.make None in
+  let ring_file = ring_file_of_pid dir child_pid in
   let alive () =
     (* on Windows, [waitpid] will fail if the process has been reaped *)
     if Option.is_some @@ Atomic.get reaped then false
@@ -253,16 +263,22 @@ let exec_process (config : runtime_events_config) (args : string list) :
       if orphaned then
         Printf.eprintf
           "warning: could not terminate child %d, leaving %s behind\n%!"
-          child_pid
-          (ring_file_of_pid dir child_pid)
-      else Unix.unlink (ring_file_of_pid dir child_pid)
+          child_pid ring_file
+      else Unix.unlink ring_file
   in
-  { alive; cursor; close; origin = Launched { reaped }; pid = child_pid }
+  {
+    alive;
+    cursor;
+    close;
+    origin = Launched { reaped };
+    pid = child_pid;
+    ring_file;
+  }
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
   if not (Platform.is_process_alive ~pid) then
-    raise (Fail (Printf.sprintf "process %d does not exist" pid));
+    fail @@ Printf.sprintf "process %d does not exist" pid;
   (* Check the events file exists and is readable *)
   let ring_file = ring_file_of_pid dir pid in
   if not (Sys.file_exists ring_file) then
@@ -280,11 +296,11 @@ let attach_process (dir : string) (pid : int) : subprocess =
              ring_file)));
   let cursor =
     try Runtime_events.create_cursor (Some (dir, pid))
-    with Failure str -> raise (Fail (str ^ " Directory: " ^ dir))
+    with Failure str -> fail (str ^ " Directory: " ^ dir)
   in
   let alive () = Platform.is_process_alive ~pid
   and close () = Runtime_events.free_cursor cursor in
-  { alive; cursor; close; origin = Attached; pid }
+  { alive; cursor; close; origin = Attached; pid; ring_file }
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with
@@ -302,7 +318,7 @@ let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
     ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
     (fun () ->
       Process_poller.start ~alive_check:child.alive ~pid:child.pid
-        ~interval:process_poller_sleep ~sample_rss;
+        ~ring_file:child.ring_file ~interval:process_poller_sleep ~sample_rss;
       Fun.protect ~finally:Process_poller.stop (fun () ->
           (* Read from the child process *)
           while Process_poller.is_alive () && not (Atomic.get interrupted) do
@@ -386,5 +402,4 @@ let olly config exec_args =
       exit_status child
       |> Option.iter @@ function
          | Unix.WEXITED 0 -> ()
-         | status ->
-             raise (Fail (Printf.sprintf "Child %s" @@ str_of_status status)))
+         | status -> fail @@ Printf.sprintf "Child %s" @@ str_of_status status)

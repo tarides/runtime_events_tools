@@ -39,6 +39,7 @@ let terminate_and_reap handle =
   in
   wait ()
 
-external olly_get_rss_kb : int -> int = "olly_get_rss_kb"
+external olly_get_rss_and_ring_kb : int -> string -> int * int
+  = "olly_rss_and_ring_kb"
 
-let get_rss_kb ~pid = olly_get_rss_kb pid
+let get_rss_and_ring_kb ~pid ~ring_file = olly_get_rss_and_ring_kb pid ring_file
