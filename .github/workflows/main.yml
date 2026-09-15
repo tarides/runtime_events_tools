@@ -36,7 +36,6 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           opam-pin: false
-          opam-depext: false
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
 
