@@ -10,16 +10,27 @@
    footprint. *)
 let sample_peak_rss ~pid ~ring_file ~peak_rss ~excludes_ring =
   let rss_kb, ring_kb = Platform.get_rss_and_ring_kb ~pid ~ring_file in
-  if ring_kb < 0 then Atomic.set excludes_ring false;
-  let rss_kb =
-    if ring_kb > 0 then
-      (* The ring is shared with this process, so in principle it could hold
-         resident pages the traced process never faulted in; clamp rather
-         than report a negative footprint. *)
-      max 0 (rss_kb - ring_kb)
-    else rss_kb
-  in
-  Atomic.set peak_rss (max rss_kb (Atomic.get peak_rss))
+  (* A live process always has a non-zero RSS, so zero means we could not read
+     one — all but certainly because the process exited between the liveness
+     check and here.  That is not a sample in which the ring went unattributed,
+     and must not be recorded as one: [excludes_ring] never goes back to true,
+     so a single such sample at the end of an otherwise sound run would report
+     the whole peak as untrustworthy. *)
+  if rss_kb > 0 then begin
+    if ring_kb < 0 then Atomic.set excludes_ring false;
+    let rss_kb =
+      if ring_kb > 0 then
+        (* On Linux the ring's pages are counted from the traced process's own
+           page tables, the same ones its RSS is drawn from, so there they
+           cannot exceed it. On macOS the count comes from the backing region,
+           and the ring is shared with this process, so in principle it could
+           hold resident pages the traced process never faulted in; clamp
+           rather than report a negative footprint. *)
+        max 0 (rss_kb - ring_kb)
+      else rss_kb
+    in
+    Atomic.set peak_rss (max rss_kb (Atomic.get peak_rss))
+  end
 
 type t = {
   stop_flag : bool Atomic.t;

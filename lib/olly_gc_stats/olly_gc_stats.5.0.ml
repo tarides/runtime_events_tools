@@ -116,7 +116,8 @@ let print_percentiles json output hist outliers =
           };
         event_words_lost = Olly_common.Launch.Lost_events.event_words_lost ();
         stats_reliable = stats_reliable ();
-        max_rss_excludes_ring = Olly_common.Process_poller.peak_rss_excludes_ring ();
+        max_rss_excludes_ring =
+          Olly_common.Process_poller.peak_rss_excludes_ring ();
       }
     |> Json.(print oc Gc_stats.jsont)
   else (

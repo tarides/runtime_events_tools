@@ -295,8 +295,8 @@ module Gc_stats = struct
     |> Jsont.Object.mem "stats_reliable" Jsont.bool
          ~enc:(fun t -> t.stats_reliable)
          ~dec_absent:false
-    |> Jsont.Object.mem "max_rss_excludes_ring" Jsont.bool
-         ~enc:(fun t -> t.max_rss_excludes_ring)
+    |> Jsont.Object.mem "max_rss_excludes_ring" Jsont.bool ~enc:(fun t ->
+        t.max_rss_excludes_ring)
     |> Jsont.Object.finish
 
   let _ = jsont
