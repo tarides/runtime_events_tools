@@ -9,7 +9,7 @@
  (enabled_if
   (< %{ocaml_version} 5.3))
  (action
-  (copy %{deps} %{target})))
+  (copy# %{deps} %{target})))
 
 (rule
  (deps olly_gc_stats.5.3.ml)
@@ -17,7 +17,7 @@
  (enabled_if
   (>= %{ocaml_version} 5.3))
  (action
-  (copy %{deps} %{target})))
+  (copy# %{deps} %{target})))
 
 (rule
  (deps gc_counters_shim.5.3.ml)
@@ -27,7 +27,7 @@
    (>= %{ocaml_version} 5.3)
    (< %{ocaml_version} 5.5)))
  (action
-  (copy %{deps} %{target})))
+  (copy# %{deps} %{target})))
 
 (rule
  (deps gc_counters_shim.5.5.ml)
@@ -35,4 +35,4 @@
  (enabled_if
   (>= %{ocaml_version} 5.5))
  (action
-  (copy %{deps} %{target})))
+  (copy# %{deps} %{target})))
