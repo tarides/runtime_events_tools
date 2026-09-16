@@ -16,41 +16,15 @@
  * mapping could not be found.  Passing an empty [ring_file] asks for
  * the RSS only.
  *
- * Each platform arm below supplies [platform_rss_kb] and
- * [platform_ring_kb], both plain C.  The single [olly_rss_and_ring_kb]
- * that calls them lives outside the #if chain, so the FFI mechanics —
- * root registration, copying the path out of the OCaml heap, releasing
- * the runtime lock — are written once, and an arm that fails to supply
- * either function is a build failure rather than a silently wrong
- * number.
+ * Each platform arm below supplies a single [platform_sample], plain C,
+ * returning both numbers.  A  platform that fails to supply [platform_sample] 
+ * is a link error rather than a silently wrong number.  
+ * One function rather than two because the numbers are not
+ * independent on all platforms.
  *
- * Only macOS identifies the ring so far.  On Linux we read VmHWM, a
- * peak computed by the kernel, which cannot be decomposed against the
- * *current* per-mapping Rss: that /proc/<pid>/smaps reports; that needs
- * a different approach and is not attempted here.
- *
- * On Linux the same /proc/<pid>/status file exposes additional fields
- * that would be valuable for GC sweep / compiler-comparison benchmarks,
- * and which would cost no extra syscalls — just scanning more lines in
- * the same read pass:
- *
- *   Field     What it measures                   Useful for
- *   -------   --------------------------------   ----------------------------------
- *   VmRSS     Current RSS at sample time         Memory trajectory over time
- *   VmData    Heap + anonymous mappings           Directly reflects GC heap sizing;
- *                                                 changes with minor-heap size (s)
- *                                                 and space overhead (o) parameters
- *   VmStk     Stack size                          Stack-heavy benchmarks: deep
- *                                                 recursion, effects/continuations
- *                                                 (multicore-effects suite), and
- *                                                 comparing stack segment handling
- *                                                 across compiler versions
- *   VmPeak    Peak virtual address space           Total address space pressure
- *                                                 including mmap'd regions and the
- *                                                 runtime events ring buffer
- *   VmSize    Current virtual address space       Same as VmPeak but instantaneous
- *   Threads   Thread count                        Sanity check for multicore
- *                                                 benchmarks (confirms domain count)
+ * Neither number is a peak: both platforms that implement this report
+ * the RSS as it is at the sample, and the caller tracks the peak of the
+ * difference.  That is forced rather than chosen — see the Linux arm.
  *
  * On FreeBSD, struct kinfo_proc has ki_rssize (RSS) and ki_size (total
  * VM) but not a heap/stack split; libprocstat would give the per-mapping
@@ -64,48 +38,250 @@
 #include <limits.h>
 #include <string.h>
 
-/* Supplied by the platform arm below.  Neither touches an OCaml value,
- * and both are called with the runtime lock released.
- *
- * [platform_rss_kb] returns the process's resident set size in kB, or 0
- * if it could not be read.  [platform_ring_kb] returns the resident kB
- * of the ring buffer mapped from [ring_file], or -1 where the platform
- * cannot attribute it. */
-static long platform_rss_kb(int pid);
-static long platform_ring_kb(int pid, const char *ring_file);
+struct rss_sample {
+  long rss_kb;  /* resident set size in kB, 0 if it could not be read */
+  long ring_kb; /* resident kB of the ring, -1 if it could not be attributed */
+};
+
+/* Supplied by the platform arm below.  Does not touch an OCaml value,
+ * and is called with the runtime lock released.  [ring_file] is NULL
+ * when the caller wants the RSS only. */
+static struct rss_sample platform_sample(int pid, const char *ring_file);
 
 #if defined(__linux__)
 
+#include <fcntl.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <unistd.h>
 
-static long platform_rss_kb(int pid) {
+/* VmRSS and VmHWM from /proc/<pid>/status.  Either is left at 0 if its 
+ * line is absent. */
+static void status_rss_kb(int pid, long *rss_kb, long *hwm_kb) {
   char path[64];
   char line[256];
-  long vmhwm = 0;
   FILE *f;
 
+  *rss_kb = 0;
+  *hwm_kb = 0;
+
   snprintf(path, sizeof(path), "/proc/%d/status", pid);
+  f = fopen(path, "r");
+  if (!f)
+    return;
+  
+  bool rss_done = false;
+  bool hmw_done = false;
+  while ((!rss_done || !hmw_done) && fgets(line, sizeof(line), f)) {
+    if (strncmp(line, "VmRSS:", 6) == 0) {
+      rss_done = true;
+      sscanf(line + 6, " %ld", rss_kb);
+    }
+    else if (strncmp(line, "VmHWM:", 6) == 0) {
+      hmw_done = true;
+      sscanf(line + 6, " %ld", hwm_kb);
+    }
+  }
+  fclose(f);
+}
+
+/* The width of the pathname field [ring_range] scans below.  The format
+ * string needs it as a literal — scanf has no runtime width, [*] there
+ * meaning assignment suppression — so it is spelled once here and
+ * turned into one by the stringifier.  A literal rather than
+ * [PATH_MAX - 1] because stringifying that yields "4096-1", which is
+ * not a width. */
+#define MAPS_PATH_MAX 4095
+#define OLLY_STRINGIFY_(x) #x
+#define OLLY_STRINGIFY(x) OLLY_STRINGIFY_(x)
+
+/* The caller rejects a [ring_file] that does not fit in PATH_MAX, so a
+ * field this wide can hold any path that could compare equal to one.  A
+ * longer one is truncated, and could not have matched in any case. */
+_Static_assert(MAPS_PATH_MAX + 1 >= PATH_MAX,
+               "maps pathname field narrower than PATH_MAX");
+
+/* The address range of the ring's mapping in [pid], or 0 if there is no
+ * such mapping.
+ *
+ * Matching is on the inode, confirmed by either the device or the path.
+ * The device alone is not enough: on btrfs, stat() reports the
+ * subvolume's anonymous device while /proc/<pid>/maps prints the
+ * superblock's, so the two disagree for any file outside the top-level
+ * subvolume.  The path alone is not enough either, since it is gone
+ * once the file has been unlinked.  Either confirms the other, and an
+ * inode number is on its own too weak to match on.
+ *
+ * One mmap is one VMA, but mprotect and madvise can split it, so scan
+ * over the consecutive matching ones as the macOS arm does. */
+static int ring_range(int pid, const char *ring_file, unsigned long *lo,
+                      unsigned long *hi) {
+  char path[64];
+  char line[PATH_MAX + 128];
+  char deleted[PATH_MAX + 16];
+  struct stat st;
+  FILE *f;
+  int found = 0;
+
+  *lo = 0;
+  *hi = 0;
+
+  /* stat() rather than comparing paths only: this resolves symlinks, so
+   * the directory olly was given need not be the canonical one. */
+  if (stat(ring_file, &st) != 0)
+    return 0;
+
+  /* The kernel appends " (deleted)" to the pathname once the file has
+   * been unlinked — which the ring has been, if olly is attached to a
+   * process whose ring someone else removed.  Spell that form out once
+   * here rather than trimming it off each line. */
+  snprintf(deleted, sizeof(deleted), "%s (deleted)", ring_file);
+
+  snprintf(path, sizeof(path), "/proc/%d/maps", pid);
   f = fopen(path, "r");
   if (!f)
     return 0;
 
   while (fgets(line, sizeof(line), f)) {
-    if (strncmp(line, "VmHWM:", 6) == 0) {
-      sscanf(line + 6, " %ld", &vmhwm);
-      break;
-    }
+    unsigned long start, end, ino;
+    unsigned int maj, min;
+    char name[MAPS_PATH_MAX + 1];
+    int fields;
+
+    /* address, then the perms and file offset we have no use for, then
+     * dev, inode, and last the pathname, which may itself contain
+     * spaces and so runs to the end of the line.  An anonymous mapping
+     * has none: [fields] is then 5 rather than 6, and [name] unset. */
+    fields = sscanf(line, "%lx-%lx %*s %*s %x:%x %lu %" OLLY_STRINGIFY(
+                              MAPS_PATH_MAX) "[^\n]",
+                    &start, &end, &maj, &min, &ino, name);
+    if (fields < 5)
+      continue;
+    if (ino == (unsigned long)st.st_ino &&
+        (makedev(maj, min) == st.st_dev ||
+         (fields == 6 && (strcmp(name, ring_file) == 0 ||
+                          strcmp(name, deleted) == 0)))) {
+      if (!found) {
+        found = 1;
+        *lo = start;
+      }
+      *hi = end;
+    } else if (found)
+      break; /* past the last matching mapping */
   }
   fclose(f);
-  return vmhwm;
+  return found;
 }
 
-/* VmHWM is a peak maintained by the kernel, and the per-mapping Rss: in
- * /proc/<pid>/smaps is a current figure; subtracting one from the other
- * is not sound.  Leave the ring in. */
-static long platform_ring_kb(int pid, const char *ring_file) {
-  (void)pid;
-  (void)ring_file;
-  return -1;
+/* Resident kB of [pid]'s pages over [lo, hi), or -1 if they could not be
+ * read.
+ *
+ * /proc/<pid>/pagemap reports one 8-byte entry per page, whose top bit
+ * says the page is present in *this* process's page tables — the same
+ * pages, from the same mm, that VmRSS counts.  So the ring's kB are a
+ * subset of the RSS's by construction, and the subtraction the caller
+ * performs is exact rather than an estimate across two accountings.
+ * Transparent huge pages are reported as each of their constituent
+ * small pages, so they need no special handling.
+ *
+ * Reading this needs PTRACE_MODE_READ on the target, which is the same
+ * permission /proc/<pid>/maps and smaps already need; yama's
+ * ptrace_scope does not narrow it, as that only governs
+ * PTRACE_MODE_ATTACH.  Unprivileged readers see the present bit but a
+ * zeroed page frame number, which is all this wants. */
+
+/* Pagemap entries per read: 32kB of stack, covering 16MB of the mapping
+ * per pread at a 4kB page, so a 512MB ring costs 32 of them. */
+#define PAGEMAP_BATCH 4096
+
+static long pagemap_resident_kb(int pid, unsigned long lo, unsigned long hi) {
+  uint64_t entries[PAGEMAP_BATCH];
+  char path[64];
+  long page_size = sysconf(_SC_PAGESIZE);
+  long page_kb = page_size / 1024;
+  long pages = (long)((hi - lo) / page_size);
+  long present = 0;
+  long done = 0;
+  int fd;
+
+  snprintf(path, sizeof(path), "/proc/%d/pagemap", pid);
+  fd = open(path, O_RDONLY);
+  if (fd < 0)
+    return -1;
+
+  while (done < pages) {
+    long want = pages - done;
+    ssize_t got;
+
+    if (want > PAGEMAP_BATCH)
+      want = PAGEMAP_BATCH;
+    got = pread(fd, entries, (size_t)want * sizeof(entries[0]),
+                (off_t)((lo / page_size) + done) * (off_t)sizeof(entries[0]));
+    if (got <= 0) { /* the process is gone, or we may not read it */
+      close(fd);
+      return -1;
+    }
+    got /= (ssize_t)sizeof(entries[0]);
+    for (ssize_t i = 0; i < got; i++)
+      if (entries[i] >> 63)
+        present++;
+    done += got;
+  }
+  close(fd);
+  return present * page_kb;
+}
+
+/* Where the ring was last seen.  Only the poller domain calls in here,
+ * for one process per run.  The mapping is made once, while the child's
+ * runtime starts up, and never moves, so the /proc/<pid>/maps scan —
+ * whose cost grows with the whole address space rather than with the
+ * ring — is worth doing only once. */
+static int ring_hint_pid = 0;
+static unsigned long ring_hint_lo = 0;
+static unsigned long ring_hint_hi = 0;
+
+static long ring_resident_kb(int pid, const char *ring_file) {
+  unsigned long lo = 0, hi = 0;
+
+  if (ring_hint_pid == pid) {
+    lo = ring_hint_lo;
+    hi = ring_hint_hi;
+  } else if (ring_range(pid, ring_file, &lo, &hi)) {
+    ring_hint_pid = pid;
+    ring_hint_lo = lo;
+    ring_hint_hi = hi;
+  } else
+    return -1;
+
+  return pagemap_resident_kb(pid, lo, hi);
+}
+
+static struct rss_sample platform_sample(int pid, const char *ring_file) {
+  struct rss_sample s = {0, -1};
+  long rss_kb, hwm_kb;
+
+  /* The ring before the RSS: the ring only grows, so what skew there is
+   * between two reads that are not one atomic sample lands on the side
+   * of over-reporting the program's own footprint rather than under. */
+  if (ring_file)
+    s.ring_kb = ring_resident_kb(pid, ring_file);
+  status_rss_kb(pid, &rss_kb, &hwm_kb);
+
+  /* VmHWM is a peak the kernel maintains exactly, and so the better
+   * number when there is nothing to subtract from it.  But it cannot be
+   * decomposed: the ring's share is only ever known for the RSS as it is
+   * now, and subtracting a current figure from a historical peak gives
+   * an answer that collapses to nothing whenever the program peaked
+   * before the ring filled.  So where the ring can be attributed, report
+   * VmRSS and let the caller take the peak of the difference, as on
+   * macOS; a transient peak between samples is then missed, which is the
+   * price of the ring being excluded at all. */
+  s.rss_kb = (s.ring_kb >= 0) ? rss_kb : hwm_kb;
+  return s;
 }
 
 #elif defined(__APPLE__)
@@ -114,14 +290,6 @@ static long platform_ring_kb(int pid, const char *ring_file) {
 #include <sys/proc_info.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-static long platform_rss_kb(int pid) {
-  struct proc_taskinfo ti;
-
-  if (proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &ti, sizeof(ti)) <= 0)
-    return 0;
-  return (long)(ti.pti_resident_size / 1024);
-}
 
 /* Resident kB of the VM regions of [pid] that are backed by the vnode
  * (dev, ino) and lie at or above [from], or -1 if there is no such
@@ -174,7 +342,17 @@ static uint64_t ring_hint_addr = 0;
  * all costs a walk of every region below it (~1ms).  The ring's mapping
  * never moves, so remember where it was and start there next time,
  * falling back to the full walk if it is no longer at that address. */
-static long ring_resident_kb(int pid, uint32_t dev, uint64_t ino) {
+static long ring_kb(int pid, const char *ring_file) {
+  struct stat st;
+
+  /* [stat] rather than a string comparison against the region's path:
+   * this resolves symlinks, so the directory olly was given need not be
+   * the canonical one. */
+  if (stat(ring_file, &st) != 0)
+    return -1;
+
+  uint32_t dev = (uint32_t)st.st_dev;
+  uint64_t ino = (uint64_t)st.st_ino;
   uint64_t hint = (ring_hint_pid == pid) ? ring_hint_addr : 0;
   uint64_t found_at = 0;
   long total = -1;
@@ -188,18 +366,18 @@ static long ring_resident_kb(int pid, uint32_t dev, uint64_t ino) {
     ring_hint_pid = pid;
     ring_hint_addr = found_at;
   }
-  return total;
+  return total;  
 }
 
-static long platform_ring_kb(int pid, const char *ring_file) {
-  struct stat st;
+static struct rss_sample platform_sample(int pid, const char *ring_file) {
+  struct rss_sample s = {0, -1};
+  struct proc_taskinfo ti;
 
-  /* [stat] rather than a string comparison against the region's path:
-   * this resolves symlinks, so the directory olly was given need not be
-   * the canonical one. */
-  if (stat(ring_file, &st) != 0)
-    return -1;
-  return ring_resident_kb(pid, (uint32_t)st.st_dev, (uint64_t)st.st_ino);
+  if (ring_file)
+    s.ring_kb = ring_kb(pid, ring_file);
+  if (proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &ti, sizeof(ti)) > 0)
+    s.rss_kb = (long)(ti.pti_resident_size / 1024);
+  return s;
 }
 
 #elif defined(__FreeBSD__)
@@ -209,64 +387,40 @@ static long platform_ring_kb(int pid, const char *ring_file) {
 #include <sys/user.h>
 #include <unistd.h>
 
-static long platform_rss_kb(int pid) {
+/* kinfo_proc carries no per-mapping breakdown; libprocstat would be
+ * needed to locate the ring, so the ring is left in. */
+static struct rss_sample platform_sample(int pid, const char *ring_file) {
+  struct rss_sample s = {0, -1};
   int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
   struct kinfo_proc kp;
   size_t len = sizeof(kp);
 
-  if (sysctl(mib, 4, &kp, &len, NULL, 0) != 0)
-    return 0;
-  return (long)kp.ki_rssize * getpagesize() / 1024;
-}
-
-/* kinfo_proc carries no per-mapping breakdown; libprocstat would be
- * needed to locate the ring. */
-static long platform_ring_kb(int pid, const char *ring_file) {
-  (void)pid;
   (void)ring_file;
-  return -1;
+  if (sysctl(mib, 4, &kp, &len, NULL, 0) == 0)
+    s.rss_kb = (long)kp.ki_rssize * getpagesize() / 1024;
+  return s;
 }
 
 #else
 
-static long platform_rss_kb(int pid) {
-  (void)pid;
-  return 0;
-}
+static struct rss_sample platform_sample(int pid, const char *ring_file) {
+  struct rss_sample s = {0, -1};
 
-static long platform_ring_kb(int pid, const char *ring_file) {
   (void)pid;
   (void)ring_file;
-  return -1;
+  return s;
 }
 
 #endif
 
-/* Build the (rss_kb, ring_kb) result.  Must be called with the runtime
- * lock held.
- *
- * Both fields are immediate, so nothing between the allocation and the
- * stores can collect and [res] cannot move.  The root is registered
- * regardless: giving this tuple a boxed field later would mean
- * allocating that field, which could move [res] out from under us, and
- * the resulting heap corruption would be neither local nor obvious. */
-static value rss_and_ring(long rss_kb, long ring_kb) {
-  CAMLparam0();
-  CAMLlocal1(res);
-
-  res = caml_alloc_small(2, 0);
-  Field(res, 0) = Val_long(rss_kb);
-  Field(res, 1) = Val_long(ring_kb);
-  CAMLreturn(res);
-}
-
 CAMLprim value olly_rss_and_ring_kb(value v_pid, value v_ring_file) {
   CAMLparam2(v_pid, v_ring_file);
+  CAMLlocal1(res);
   int pid = Int_val(v_pid);
   char ring_file[PATH_MAX];
+  const char *ring_arg = NULL;
+  struct rss_sample s;
   size_t len;
-  long rss_kb;
-  long ring_kb = -1;
 
   /* Copy the path out of the OCaml heap: nothing between
    * [caml_enter_blocking_section] and [caml_leave_blocking_section] may
@@ -280,13 +434,14 @@ CAMLprim value olly_rss_and_ring_kb(value v_pid, value v_ring_file) {
 
   /* The macOS region walk takes up to ~1ms.  Held across that, the
    * runtime lock would keep this domain from servicing STW requests, and
-   * a minor GC on the domain draining the ring would stall behind it —
-   * which is how ring words get lost. */
+   * a minor GC on the domain draining the ring would stall behind it. */
   caml_enter_blocking_section();
-  rss_kb = platform_rss_kb(pid);
-  if (ring_file[0] != '\0')
-    ring_kb = platform_ring_kb(pid, ring_file);
+  ring_arg = ring_file[0] != '\0' ? ring_file : NULL;
+  s = platform_sample(pid, ring_arg);
   caml_leave_blocking_section();
 
-  CAMLreturn(rss_and_ring(rss_kb, ring_kb));
+  res = caml_alloc_small(2, 0);
+  Field(res, 0) = Val_long(s.rss_kb);
+  Field(res, 1) = Val_long(s.ring_kb);
+  CAMLreturn(res);
 }
