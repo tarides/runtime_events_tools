@@ -4,4 +4,10 @@
   %{bin:olly}
   %{dep:../test_gc_stats.exe}
   %{dep:../run_exit.exe}
-  %{dep:../run_crash.exe}))
+  %{dep:../run_crash.exe}
+  %{dep:../run_alloc.exe}))
+
+(cram
+ (applies_to crash)
+ (enabled_if
+  (<> %{os_type} Win32)))

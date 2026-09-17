@@ -83,14 +83,16 @@ Trace subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. Where the resident pages of the runtime events ring
+             buffer can be attributed to it, on Linux and OSX, the peak is the
+             maximum over samples of the RSS less the ring: only the current
+             RSS can be decomposed that way, so a shorter interval lowers the
+             chance of missing a transient peak at the cost of more sampling
+             overhead, a genuine accuracy/overhead tradeoff. Where they cannot,
+             on FreeBSD and wherever the ring's mapping could not be found,
+             Linux falls back to the exact peak the kernel maintains, which
+             each sample can only raise, while OSX and FreeBSD report only the
+             current RSS and the peak is again approximated from the samples.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -161,7 +163,13 @@ GC stats subcommand help:
          Max RSS
              Peak resident set size (in kB) of the child process, sampled
              during execution. The sampling interval is controlled by
-             --proc-stat-freq and is independent of --freq.
+             --proc-stat-freq and is independent of --freq. The runtime events
+             ring buffer is mapped into the child, and is routinely much larger
+             than the program's own live memory, so its resident pages are
+             excluded from this figure where the platform permits it. Currently
+             that is macOS only; elsewhere the figure still includes the ring,
+             which the human-readable output says and the json output reports
+             as max_rss_excludes_ring.
   
   ARGUMENTS
          EXECUTABLE
@@ -198,14 +206,16 @@ GC stats subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. Where the resident pages of the runtime events ring
+             buffer can be attributed to it, on Linux and OSX, the peak is the
+             maximum over samples of the RSS less the ring: only the current
+             RSS can be decomposed that way, so a shorter interval lowers the
+             chance of missing a transient peak at the cost of more sampling
+             overhead, a genuine accuracy/overhead tradeoff. Where they cannot,
+             on FreeBSD and wherever the ring's mapping could not be found,
+             Linux falls back to the exact peak the kernel maintains, which
+             each sample can only raise, while OSX and FreeBSD report only the
+             current RSS and the peak is again approximated from the samples.
   
   COMMON OPTIONS
          These options are common to all commands.
