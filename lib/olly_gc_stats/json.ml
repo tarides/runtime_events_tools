@@ -21,9 +21,15 @@ let assoc_map_jsont ?kind ?doc t =
   let enc f mems acc =
     List.fold_left (fun acc (n, v) -> f Jsont.Meta.none n v acc) acc mems
   in
+  let dec_empty () = []
+  and dec_add _ k v acc = (k, v) :: acc
+  and dec_finish _ v = v in
   Jsont.Object.(
     map ?kind ?doc Fun.id
-    |> keep_unknown (Mems.map t ~enc:Jsont.Object.Mems.{ enc }) ~enc:Fun.id
+    |> keep_unknown
+         (Mems.map t ~dec_empty ~dec_add ~dec_finish
+            ~enc:Jsont.Object.Mems.{ enc })
+         ~enc:Fun.id
     |> finish)
 
 type float0 = float
@@ -218,11 +224,11 @@ module Gc_stats = struct
     min_latency : ms;
     max_latency : ms;
     distr_latency : ms assoc_map;
-    outliers : outliers;
+    outliers : outliers option; [@option]
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option; [@option]
     collections : collections;
-    stats_reliable : bool;
+    stats_reliable : bool option; [@option]
   }
   [@@deriving_inline jsont]
 
@@ -270,7 +276,10 @@ module Gc_stats = struct
     |> Jsont.Object.mem "max_latency" ms_jsont ~enc:(fun t -> t.max_latency)
     |> Jsont.Object.mem "distr_latency" (assoc_map_jsont ms_jsont)
          ~enc:(fun t -> t.distr_latency)
-    |> Jsont.Object.mem "outliers" outliers_jsont ~enc:(fun t -> t.outliers)
+    |> Jsont.Object.mem "outliers"
+         (Jsont.option outliers_jsont)
+         ~enc:(fun t -> t.outliers)
+         ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.mem "allocations" allocations_jsont ~enc:(fun t ->
         t.allocations)
     |> Jsont.Object.mem "domain_alloc_stats"
@@ -279,8 +288,9 @@ module Gc_stats = struct
          ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.mem "collections" collections_jsont ~enc:(fun t ->
         t.collections)
-    |> Jsont.Object.mem "stats_reliable" Jsont.bool ~enc:(fun t ->
-        t.stats_reliable)
+    |> Jsont.Object.mem "stats_reliable" (Jsont.option Jsont.bool)
+         ~enc:(fun t -> t.stats_reliable)
+         ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.finish
 
   let _ = jsont

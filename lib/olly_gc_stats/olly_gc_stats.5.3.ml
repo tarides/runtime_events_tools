@@ -172,11 +172,12 @@ let print_percentiles json output hist outliers =
         max_latency;
         distr_latency;
         outliers =
-          {
-            count = outliers.count;
-            mean_latency = outlier_mean_ms;
-            max_latency = outliers.max |> float_of_int |> ms;
-          };
+          Some
+            {
+              count = outliers.count;
+              mean_latency = outlier_mean_ms;
+              max_latency = outliers.max |> float_of_int |> ms;
+            };
         allocations =
           {
             total_heap;
@@ -194,7 +195,7 @@ let print_percentiles json output hist outliers =
             compactions = !compactions;
           };
         stats_reliable =
-          not @@ Olly_common.Launch.Lost_events.were_events_lost ();
+          Some (not @@ Olly_common.Launch.Lost_events.were_events_lost ());
       }
     |> Json.(print oc Gc_stats.jsont)
   else (

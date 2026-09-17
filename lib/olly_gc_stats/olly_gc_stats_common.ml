@@ -180,3 +180,170 @@ let latency poll_sleep json output runtime_events_dir exec_args =
          }
          exec_args)
   with Fail msg -> `Error (false, msg)
+
+let ( &&& ) a b =
+  match (a, b) with
+  | Ok (), Ok () -> Ok ()
+  | (Error _ as e), Ok () | Ok (), (Error _ as e) -> e
+  | Error e1, Error e2 -> Error (e1 @ e2)
+
+let ( ||| ) a b =
+  match (a, b) with
+  | Ok (), _ | _, Ok () -> Ok ()
+  | Error e1, Error e2 -> Error (e1 @ e2)
+
+let check_eq field pp ~expected actual =
+  if expected <> actual then
+    Error [ Format.asprintf "%s: %a <> %a" field pp actual pp expected ]
+  else Ok ()
+
+let check_range field pp lo hi actual =
+  if actual < lo || actual > hi then
+    Error [ Format.asprintf "%s: %a ∉ [%a, %a]" field pp actual pp lo pp hi ]
+  else Ok ()
+
+let pp_s ppf s = Format.fprintf ppf "%f s" s
+
+let validate_domain_stat (t : Json.Gc_stats.t)
+    (key, (ds : Json.Gc_stats.domain_stat)) =
+  if key |> int_of_string_opt |> Option.is_none then
+    Error [ Printf.sprintf "Domain stat map key not an integer: %s" key ]
+  else
+    Ok ()
+    &&& check_range "0 <= gc_time <= wall_time" pp_s 0. ds.wall_time ds.gc_time
+    &&& check_range "0 <= gc_time <= global.gc_time" pp_s 0. t.gc_time
+          ds.gc_time
+    &&& check_range "0 <= wall_time <= global.wall_time" pp_s 0. t.wall_time
+          ds.wall_time
+    &&& check_range "0 <= gc_overhead <= 100" pp_s 0. 100. t.gc_overhead
+
+let validate_distr_latency (t : Json.Gc_stats.t) (key, (latency : float)) =
+  if key |> int_of_string_opt |> Option.is_none then
+    Error [ Printf.sprintf "Latency map key not an integer: %s" key ]
+  else
+    Ok ()
+    &&& check_range "min_latency <= latency <= max_latency" pp_s t.min_latency
+          t.max_latency latency
+
+let validate_outliers (t : Json.Gc_stats.t) (outliers : Json.Gc_stats.outliers)
+    =
+  check_range "0 <= outliers" Format.pp_print_int 0 Int.max_int outliers.count
+  &&& check_range "0 <= mean_latency <= max_latency" Format.pp_print_float 0.
+        outliers.max_latency outliers.mean_latency
+  &&& check_range "t.min_latency <= mean_latency <= t.max_latency"
+        Format.pp_print_float t.min_latency t.max_latency outliers.mean_latency
+  &&& check_range "t.min_latency <= max_latency <= t.max_latency"
+        Format.pp_print_float t.min_latency t.max_latency outliers.max_latency
+
+let validate_domain_alloc_stat (t : Json.Gc_stats.t)
+    (key, (da : Json.Gc_stats.domain_alloc_stat)) =
+  if key |> int_of_string_opt |> Option.is_none then
+    Error [ Printf.sprintf "Domain alloc stat map key not an integer: %s" key ]
+  else
+    Ok ()
+    &&& check_eq "total = minor - promoted + major" Format.pp_print_int
+          ~expected:(da.minor - da.promoted + da.major)
+          da.total
+    &&& check_range "0 <= promoted_pct <= 100" Format.pp_print_float 0. 100.
+          da.promoted_pct
+    &&& check_range "total <= t.total_heap" Format.pp_print_int 0
+          (Float.to_int t.allocations.total_heap)
+          da.total
+    &&& check_range "minor <= t.minor_heap" Format.pp_print_int 0
+          (Float.to_int t.allocations.minor_heap)
+          da.minor
+    &&& check_range "promoted <= t.promoted_words" Format.pp_print_int 0
+          (Float.to_int t.allocations.promoted_words)
+          da.promoted
+    &&& check_range "major <= t.major_heap" Format.pp_print_int 0
+          (t.allocations.major_heap |> Option.value ~default:0. |> Float.to_int)
+          da.major
+
+let validate_assoc_map t f map =
+  List.fold_left (fun acc e -> acc &&& f t e) (Ok ()) map
+
+let validate_opt t f = function None -> Ok () | Some x -> f t x
+
+let validate_domain_alloc_stats t opt =
+  let is_53_plus =
+    Sys.ocaml_release.major > 5 || Sys.ocaml_release.minor >= 3
+  in
+  match (opt, is_53_plus) with
+  | None, true -> Error [ "Missing domain_alloc_stats" ]
+  | None, false -> Ok ()
+  | Some stats, _ -> validate_assoc_map t validate_domain_alloc_stat stats
+
+let validate_json (t : Json.Gc_stats.t) =
+  let domains = List.length t.domain_stats in
+  check_range "1 <= version <= 2" Format.pp_print_int 1 2 t.version
+  &&& (check_eq "version" Format.pp_print_int ~expected:1 t.version
+      ||| check_eq "outliers field" Format.pp_print_bool ~expected:true
+            (Option.is_some t.outliers))
+  &&& check_range "0 <= cpu_time <= wall_time*domains" pp_s 0.
+        (t.wall_time *. float_of_int domains)
+        t.cpu_time
+  &&& check_range "0 <= gc_time <= cpu_time" pp_s 0. t.cpu_time t.gc_time
+  &&& check_range "0 <= gc_overhead <= 100" Format.pp_print_float 0. 100.
+        t.gc_overhead
+  (* x86-46 and RISC-V 5-level paging: 57 bits,
+      anything larger is likely a bug *)
+  &&& check_range "1 <= max_rss_kb" Format.pp_print_int 0
+        ((1 lsl 57) - 1)
+        t.max_rss_kb
+  &&& validate_assoc_map t validate_domain_stat t.domain_stats
+  &&& check_range "min_latency <= mean_latency <= max_latency"
+        Format.pp_print_float t.min_latency t.max_latency t.mean_latency
+  &&& validate_opt t validate_outliers t.outliers
+  &&& validate_domain_alloc_stats t t.domain_alloc_stats
+  &&& check_eq "total_heap = minor - promoted + major" Format.pp_print_int
+        ~expected:
+          (t.allocations.minor_heap -. t.allocations.promoted_words
+           +. Option.value ~default:0. t.allocations.major_heap
+          |> Float.to_int)
+        (Float.to_int t.allocations.total_heap)
+  &&& check_range "0 <= promoted_words <= minor_heap" Format.pp_print_float 0.
+        t.allocations.minor_heap t.allocations.promoted_words
+  &&& check_range "0 <= promoted_pct <= 100" Format.pp_print_float 0. 100.
+        t.allocations.promoted_pct
+  &&& check_range "0 <= collections.minor" Format.pp_print_int 0 Int.max_int
+        t.collections.minor
+  &&& check_range "0 <= collections.major" Format.pp_print_int 0 Int.max_int
+        t.collections.major
+  &&& check_range "0 <= collections.forced_major" Format.pp_print_int 0
+        Int.max_int t.collections.forced_major
+  &&& check_range "0 <= collections.compactions" Format.pp_print_int 0
+        Int.max_int t.collections.compactions
+
+let validate_gc_stats jsonlines files =
+  let pp_list =
+    Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_string
+  in
+  let res =
+    files
+    |> List.map @@ fun file ->
+       In_channel.with_open_bin file @@ fun ch ->
+       let res =
+         if jsonlines then
+           In_channel.fold_lines
+             (fun (n, acc) line ->
+               let res =
+                 line
+                 |> Jsont_bytesrw.decode_string ~file Json.Gc_stats.jsont
+                 |> Result.map_error List.singleton
+               in
+               (n + 1, acc &&& Result.bind res validate_json))
+             (1, Ok ()) ch
+           |> snd
+         else
+           let reader = Bytesrw.Bytes.Reader.of_in_channel ch in
+           let res =
+             Jsont_bytesrw.decode ~locs:true ~file Json.Gc_stats.jsont reader
+             |> Result.map_error List.singleton
+           in
+           Result.bind res validate_json
+       in
+       Result.fold ~ok:(fun _ -> [ "OK" ]) ~error:Fun.id res
+       |> Format.printf "@[<v1>%s: %a@]@." file pp_list;
+       res
+  in
+  if not (List.for_all Result.is_ok res) then exit Cmdliner.Cmd.Exit.some_error
