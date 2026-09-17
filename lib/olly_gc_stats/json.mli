@@ -77,11 +77,11 @@ module Gc_stats : sig
     min_latency : ms;
     max_latency : ms;
     distr_latency : ms assoc_map;
-    outliers : outliers;
+    outliers : outliers option;
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option;
     collections : collections;
-    stats_reliable : bool;
+    stats_reliable : bool option;
   }
   (** Garbage collector statistics *)
 
