@@ -37,12 +37,37 @@ module Gc_stats : sig
   type outliers = { count : int; mean_latency : ms; max_latency : ms }
   (** statistical outliers *)
 
+  type heap_pools_stat = {
+    words : int;  (** words used for small allocations in the major heap *)
+    live_words : int;  (** live words in the small allocation pool *)
+    frag_words : int;
+        (** fragments in the small allocation pool due to size rounding *)
+    wasted_words : int;
+        (** words "wasted" in the small allocation pool: words - live_words -
+            frag_words. Note that this doesn't include memory wasted by the C
+            allocator for large allocations *)
+  }
+
+  type heap_live_stat = {
+    major_pools : heap_pools_stat;
+        (** small allocations pool in the major heap *)
+    major_large_words : int;
+        (** large words in the major heap (managed by the C heap, fragmentation
+            unknown) *)
+    heap_words : int;
+        (** the OCaml heap size in words (doesn't include custom blocks) *)
+    frag_wasted_percentage : percentage;
+        (** 100 * major_pools.wasted_words / heap_words *)
+  }
+  (** OCaml heap current size *)
+
   type allocations = {
     total_heap : float0;
     minor_heap : float0;
     major_heap : float0 option;
     promoted_words : float0;
     promoted_pct : percentage;
+    live : heap_live_stat option;
   }
   (** OCaml heap allocation statistics *)
 
