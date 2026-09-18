@@ -228,6 +228,7 @@ module Gc_stats = struct
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option; [@option]
     collections : collections;
+    lost_events : int; [@default 0] [@omit ( = ) 0]
     stats_reliable : bool; [@default false]
   }
   [@@deriving_inline jsont]
@@ -238,7 +239,7 @@ module Gc_stats = struct
     let make version wall_time cpu_time gc_time gc_overhead max_rss_kb
         domain_stats mean_latency stddev_latency min_latency max_latency
         distr_latency outliers allocations domain_alloc_stats collections
-        stats_reliable =
+        lost_events stats_reliable =
       {
         version;
         wall_time;
@@ -256,6 +257,7 @@ module Gc_stats = struct
         allocations;
         domain_alloc_stats;
         collections;
+        lost_events;
         stats_reliable;
       }
     in
@@ -285,6 +287,9 @@ module Gc_stats = struct
          ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.mem "collections" collections_jsont ~enc:(fun t ->
         t.collections)
+    |> Jsont.Object.mem "lost_events" Jsont.int
+         ~enc:(fun t -> t.lost_events)
+         ~dec_absent:0 ~enc_omit:(( = ) 0)
     |> Jsont.Object.mem "stats_reliable" Jsont.bool
          ~enc:(fun t -> t.stats_reliable)
          ~dec_absent:false

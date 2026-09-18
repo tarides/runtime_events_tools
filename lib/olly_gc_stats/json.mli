@@ -81,6 +81,7 @@ module Gc_stats : sig
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option;
     collections : collections;
+    lost_events : int;
     stats_reliable : bool;
   }
   (** Garbage collector statistics *)
