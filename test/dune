@@ -5,6 +5,15 @@
  (modules test_gc_stats))
 
 (executable
+ (name run_domain_gc)
+ (modules run_domain_gc))
+
+(executable
+ (name test_gc_no_outliers)
+ (modules test_gc_no_outliers)
+ (libraries olly_gc_stats))
+
+(executable
  (name test_fib)
  (modules test_fib)
  (enabled_if

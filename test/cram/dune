@@ -4,4 +4,6 @@
   %{bin:olly}
   %{dep:../test_gc_stats.exe}
   %{dep:../run_exit.exe}
+  %{dep:../run_domain_gc.exe}
+  %{dep:../test_gc_no_outliers.exe}
   %{dep:../run_crash.exe}))

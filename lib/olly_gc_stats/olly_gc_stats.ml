@@ -114,3 +114,5 @@ let latency_cmd =
       ret
         (const Olly_gc_impl.latency $ freq_option $ json_option $ output_option
        $ runtime_events_dir $ exec_args 0))
+
+module Json = Json
