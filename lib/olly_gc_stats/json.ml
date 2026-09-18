@@ -23,7 +23,7 @@ let assoc_map_jsont ?kind ?doc t =
   in
   let dec_empty () = []
   and dec_add _ k v acc = (k, v) :: acc
-  and dec_finish _ v = v in
+  and dec_finish _ l = List.rev l in
   Jsont.Object.(
     map ?kind ?doc Fun.id
     |> keep_unknown
