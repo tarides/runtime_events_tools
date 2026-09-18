@@ -169,17 +169,17 @@ let print_latency_only json output hist outliers =
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
+let is_gc_phase = function
+  | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
+  | Runtime_events.EV_STW_HANDLER | Runtime_events.EV_MINOR
+  | Runtime_events.EV_INTERRUPT_REMOTE ->
+      true
+  | _ -> false
+
 let latency poll_sleep json output runtime_events_dir exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
   let runtime_begin ring_id ts phase =
     if is_gc_phase phase then
       match Hashtbl.find_opt current_event ring_id with

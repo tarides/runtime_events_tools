@@ -6,3 +6,5 @@ val validate_gc_stats_cmd : unit Cmdliner.Cmd.t
 
 val latency_cmd : unit Cmdliner.Cmd.t
 (** Report the GC latency profile. *)
+
+module Json : module type of Json
