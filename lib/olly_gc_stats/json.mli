@@ -77,14 +77,20 @@ module Gc_stats : sig
     min_latency : ms;
     max_latency : ms;
     distr_latency : ms assoc_map;
-    outliers : outliers option;
+    outliers : outliers;
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option;
     collections : collections;
-    stats_reliable : bool option;
+    stats_reliable : bool;
   }
   (** Garbage collector statistics *)
 
   val jsont : t Jsont.t
   (** JSON encoding of {!type:t} *)
+
+  type version_only = { version : int }
+  (** Garbage collector statistics: version checking only *)
+
+  val version_only_jsont : version_only Jsont.t
+  (** JSON encoding of {!type:version_only} *)
 end

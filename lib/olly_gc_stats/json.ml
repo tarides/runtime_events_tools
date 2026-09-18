@@ -224,11 +224,11 @@ module Gc_stats = struct
     min_latency : ms;
     max_latency : ms;
     distr_latency : ms assoc_map;
-    outliers : outliers option; [@option]
+    outliers : outliers;
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option; [@option]
     collections : collections;
-    stats_reliable : bool option; [@option]
+    stats_reliable : bool; [@default false]
   }
   [@@deriving_inline jsont]
 
@@ -276,10 +276,7 @@ module Gc_stats = struct
     |> Jsont.Object.mem "max_latency" ms_jsont ~enc:(fun t -> t.max_latency)
     |> Jsont.Object.mem "distr_latency" (assoc_map_jsont ms_jsont)
          ~enc:(fun t -> t.distr_latency)
-    |> Jsont.Object.mem "outliers"
-         (Jsont.option outliers_jsont)
-         ~enc:(fun t -> t.outliers)
-         ~dec_absent:None ~enc_omit:Option.is_none
+    |> Jsont.Object.mem "outliers" outliers_jsont ~enc:(fun t -> t.outliers)
     |> Jsont.Object.mem "allocations" allocations_jsont ~enc:(fun t ->
         t.allocations)
     |> Jsont.Object.mem "domain_alloc_stats"
@@ -288,12 +285,26 @@ module Gc_stats = struct
          ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.mem "collections" collections_jsont ~enc:(fun t ->
         t.collections)
-    |> Jsont.Object.mem "stats_reliable" (Jsont.option Jsont.bool)
+    |> Jsont.Object.mem "stats_reliable" Jsont.bool
          ~enc:(fun t -> t.stats_reliable)
-         ~dec_absent:None ~enc_omit:Option.is_none
+         ~dec_absent:false
     |> Jsont.Object.finish
 
   let _ = jsont
+
+  [@@@deriving.end]
+
+  type version_only = { version : int } [@@deriving_inline jsont]
+
+  let _ = fun (_ : version_only) -> ()
+
+  let version_only_jsont =
+    let make version = { version } in
+    Jsont.Object.map ~kind:"Version_only" make
+    |> Jsont.Object.mem "version" Jsont.int ~enc:(fun t -> t.version)
+    |> Jsont.Object.finish
+
+  let _ = version_only_jsont
 
   [@@@deriving.end]
 end

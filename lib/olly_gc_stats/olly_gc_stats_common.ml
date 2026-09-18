@@ -276,9 +276,6 @@ let validate_domain_alloc_stats t opt =
 let validate_json (t : Json.Gc_stats.t) =
   let domains = List.length t.domain_stats in
   check_range "1 <= version <= 2" Format.pp_print_int 1 2 t.version
-  &&& (check_eq "version" Format.pp_print_int ~expected:1 t.version
-      ||| check_eq "outliers field" Format.pp_print_bool ~expected:true
-            (Option.is_some t.outliers))
   &&& check_range "0 <= cpu_time <= wall_time*domains" pp_s 0.
         (t.wall_time *. float_of_int domains)
         t.cpu_time
@@ -293,7 +290,7 @@ let validate_json (t : Json.Gc_stats.t) =
   &&& validate_assoc_map t validate_domain_stat t.domain_stats
   &&& check_range "min_latency <= mean_latency <= max_latency"
         Format.pp_print_float t.min_latency t.max_latency t.mean_latency
-  &&& validate_opt t validate_outliers t.outliers
+  &&& validate_outliers t t.outliers
   &&& validate_domain_alloc_stats t t.domain_alloc_stats
   &&& check_eq "total_heap = minor - promoted + major" Format.pp_print_int
         ~expected:
@@ -314,6 +311,8 @@ let validate_json (t : Json.Gc_stats.t) =
   &&& check_range "0 <= collections.compactions" Format.pp_print_int 0
         Int.max_int t.collections.compactions
 
+let current_version = 2
+
 let validate_gc_stats jsonlines files =
   let pp_list =
     Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_string
@@ -331,7 +330,27 @@ let validate_gc_stats jsonlines files =
                  |> Jsont_bytesrw.decode_string ~file Json.Gc_stats.jsont
                  |> Result.map_error List.singleton
                in
-               (n + 1, acc &&& Result.bind res validate_json))
+               let res = Result.bind res validate_json in
+               let res =
+                 if Result.is_error res then
+                   let ver =
+                     line
+                     |> Jsont_bytesrw.decode_string ~file
+                          Json.Gc_stats.version_only_jsont
+                     |> Result.map_error List.singleton
+                   in
+                   match ver with
+                   | Error _ as e -> e
+                   | Ok v ->
+                       if v.version != current_version then
+                         (* skip different versions *)
+                         Ok ()
+                       else
+                         (* version matched, keep the previous error *)
+                         res
+                 else res
+               in
+               (n + 1, acc &&& res))
              (1, Ok ()) ch
            |> snd
          else

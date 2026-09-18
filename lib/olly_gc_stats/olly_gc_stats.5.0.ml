@@ -79,7 +79,7 @@ let print_percentiles json output hist outliers =
     in
     Json.Gc_stats.
       {
-        version = 2;
+        version = current_version;
         wall_time = real_time;
         cpu_time = !total_cpu_time;
         gc_time = total_gc_time;
@@ -92,12 +92,11 @@ let print_percentiles json output hist outliers =
         max_latency;
         distr_latency;
         outliers =
-          Some
-            {
-              count = outliers.count;
-              mean_latency = outlier_mean_ms;
-              max_latency = outliers.max |> float_of_int |> ms;
-            };
+          {
+            count = outliers.count;
+            mean_latency = outlier_mean_ms;
+            max_latency = outliers.max |> float_of_int |> ms;
+          };
         allocations =
           {
             total_heap;
@@ -115,7 +114,7 @@ let print_percentiles json output hist outliers =
             compactions = !compactions;
           };
         stats_reliable =
-          Some (not @@ Olly_common.Launch.Lost_events.were_events_lost ());
+          not @@ Olly_common.Launch.Lost_events.were_events_lost ();
       }
     |> Json.(print oc Gc_stats.jsont)
   else (
