@@ -7,6 +7,7 @@ module Lost_events = struct
     lost_words_count := if sum < 0 then max_int else sum
 
   let were_events_lost () = !lost_words_count > 0
+  let event_words_lost () = !lost_words_count
 
   let display () =
     if were_events_lost () then begin

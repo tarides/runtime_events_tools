@@ -193,6 +193,7 @@ let print_percentiles json output hist outliers =
             forced_major = !forced_major_collections;
             compactions = !compactions;
           };
+        event_words_lost = Olly_common.Launch.Lost_events.event_words_lost ();
         stats_reliable =
           not @@ Olly_common.Launch.Lost_events.were_events_lost ();
       }
