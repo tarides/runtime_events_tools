@@ -27,10 +27,11 @@ let print_percentiles json output hist outliers =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let real_time = wall_time.end_time -. wall_time.start_time in
+  let real_time = elapsed wall_time in
   let total_gc_time = to_sec @@ Array.fold_left ( + ) 0 domain_gc_times in
 
   let total_cpu_time = ref 0. in
+  let domain_elapsed_times = domain_elapsed_times () in
   let ap = Array.combine domain_elapsed_times domain_gc_times in
   Array.iteri
     (fun i (cpu_time, gc_time) ->
@@ -114,8 +115,7 @@ let print_percentiles json output hist outliers =
             compactions = !compactions;
           };
         lost_events = Olly_common.Launch.Lost_events.events_lost ();
-        stats_reliable =
-          not @@ Olly_common.Launch.Lost_events.were_events_lost ();
+        stats_reliable = stats_reliable ();
       }
     |> Json.(print oc Gc_stats.jsont)
   else (

@@ -1,10 +1,10 @@
 (library
  (name olly_common)
  (libraries runtime_events unix cmdliner)
- (modules cli launch platform process_poller sys_backport)
+ (modules cli launch platform process_poller sys_backport timestamp)
  (foreign_stubs
   (language c)
-  (names process_utils max_rss_stubs)))
+  (names process_utils max_rss_stubs timestamp_stubs)))
 
 (rule
  (enabled_if
@@ -29,3 +29,15 @@
   (>= %{ocaml_version} 5.4.0))
  (action
   (copy# sys_alias.ml sys_backport.ml)))
+
+(rule
+ (enabled_if
+  (< %{ocaml_version} 5.4.0))
+ (action
+  (copy# timestamp_backport_from_5.4.ml timestamp.ml)))
+
+(rule
+ (enabled_if
+  (>= %{ocaml_version} 5.4.0))
+ (action
+  (copy# timestamp_alias.ml timestamp.ml)))

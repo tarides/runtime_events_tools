@@ -7,7 +7,6 @@ module Lost_events = struct
     lost_words_count := if sum < 0 then max_int else sum
 
   let were_events_lost () = !lost_words_count > 0
-
   let events_lost () = !lost_words_count
 
   let display () =
@@ -294,6 +293,11 @@ let launch_process config (exec_args : exec_config) : subprocess =
   | Attach (dir, pid) -> attach_process dir pid
 
 let interrupted = Atomic.make false
+let events_start = Atomic.make 0L
+let events_done = Atomic.make 0L
+let events_start_timestamp_ns () = Atomic.get events_start
+let events_done_timestamp_ns () = Atomic.get events_done
+let now () = Timestamp.(get_current () |> to_int64)
 
 let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
   let old_handler =
@@ -303,6 +307,7 @@ let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
   Fun.protect
     ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
     (fun () ->
+      Atomic.set events_start (now ());
       Process_poller.start ~alive_check:child.alive ~pid:child.pid
         ~interval:process_poller_sleep ~sample_rss;
       Fun.protect ~finally:Process_poller.stop (fun () ->
@@ -314,7 +319,8 @@ let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
               with Unix.Unix_error (Unix.EINTR, _, _) -> ()
           done;
           (* Do one more poll in case there are any remaining events we've missed *)
-          Runtime_events.read_poll child.cursor callbacks None |> ignore))
+          Runtime_events.read_poll child.cursor callbacks None |> ignore;
+          Atomic.set events_done (now ())))
 
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
