@@ -21,9 +21,15 @@ let assoc_map_jsont ?kind ?doc t =
   let enc f mems acc =
     List.fold_left (fun acc (n, v) -> f Jsont.Meta.none n v acc) acc mems
   in
+  let dec_empty () = []
+  and dec_add _ k v acc = (k, v) :: acc
+  and dec_finish _ v = v in
   Jsont.Object.(
     map ?kind ?doc Fun.id
-    |> keep_unknown (Mems.map t ~enc:Jsont.Object.Mems.{ enc }) ~enc:Fun.id
+    |> keep_unknown
+         (Mems.map t ~dec_empty ~dec_add ~dec_finish
+            ~enc:Jsont.Object.Mems.{ enc })
+         ~enc:Fun.id
     |> finish)
 
 type float0 = float
@@ -222,7 +228,7 @@ module Gc_stats = struct
     allocations : allocations;
     domain_alloc_stats : domain_alloc_stat assoc_map option; [@option]
     collections : collections;
-    stats_reliable : bool;
+    stats_reliable : bool; [@default false]
   }
   [@@deriving_inline jsont]
 
@@ -279,11 +285,26 @@ module Gc_stats = struct
          ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.mem "collections" collections_jsont ~enc:(fun t ->
         t.collections)
-    |> Jsont.Object.mem "stats_reliable" Jsont.bool ~enc:(fun t ->
-        t.stats_reliable)
+    |> Jsont.Object.mem "stats_reliable" Jsont.bool
+         ~enc:(fun t -> t.stats_reliable)
+         ~dec_absent:false
     |> Jsont.Object.finish
 
   let _ = jsont
+
+  [@@@deriving.end]
+
+  type version_only = { version : int } [@@deriving_inline jsont]
+
+  let _ = fun (_ : version_only) -> ()
+
+  let version_only_jsont =
+    let make version = { version } in
+    Jsont.Object.map ~kind:"Version_only" make
+    |> Jsont.Object.mem "version" Jsont.int ~enc:(fun t -> t.version)
+    |> Jsont.Object.finish
+
+  let _ = version_only_jsont
 
   [@@@deriving.end]
 end

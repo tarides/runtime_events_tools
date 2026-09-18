@@ -87,4 +87,10 @@ module Gc_stats : sig
 
   val jsont : t Jsont.t
   (** JSON encoding of {!type:t} *)
+
+  type version_only = { version : int }
+  (** Garbage collector statistics: version checking only *)
+
+  val version_only_jsont : version_only Jsont.t
+  (** JSON encoding of {!type:version_only} *)
 end

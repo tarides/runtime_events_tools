@@ -159,7 +159,7 @@ let print_percentiles json output hist outliers =
     in
     Json.Gc_stats.
       {
-        version = 2;
+        version = current_version;
         wall_time = real_time;
         cpu_time = !total_cpu_time;
         gc_time = total_gc_time;
