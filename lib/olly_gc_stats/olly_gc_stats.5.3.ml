@@ -258,13 +258,6 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
   let runtime_begin ring_id ts phase =
     (* The EV_EXPLICIT_GC_* spans wrap a user call to Gc.compact, Gc.major or
        Gc.full_major, and are emitted only on the domain that made the call, so
