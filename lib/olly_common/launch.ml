@@ -299,6 +299,11 @@ let launch_process config (exec_args : exec_config) : subprocess =
   | Attach (dir, pid) -> attach_process dir pid
 
 let interrupted = Atomic.make false
+let events_start = Atomic.make 0L
+let events_done = Atomic.make 0L
+let events_start_timestamp_ns () = Atomic.get events_start
+let events_done_timestamp_ns () = Atomic.get events_done
+let now () = Timestamp.(get_current () |> to_int64)
 
 let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
   let old_handler =
@@ -308,9 +313,14 @@ let collect_events ~sample_rss process_poller_sleep poll_sleep child callbacks =
   Fun.protect
     ~finally:(fun () -> Sys.set_signal Sys.sigint old_handler)
     (fun () ->
+      Atomic.set events_start (now ());
       Process_poller.start ~alive_check:child.alive ~pid:child.pid
         ~interval:process_poller_sleep ~sample_rss;
-      Fun.protect ~finally:Process_poller.stop (fun () ->
+      let finally () =
+        Atomic.set events_done (now ());
+        Process_poller.stop ()
+      in
+      Fun.protect ~finally (fun () ->
           (* Read from the child process *)
           while Process_poller.is_alive () && not (Atomic.get interrupted) do
             Runtime_events.read_poll child.cursor callbacks None |> ignore;
