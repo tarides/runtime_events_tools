@@ -1,5 +1,6 @@
 module Lost_events : sig
   val were_events_lost : unit -> bool
+  val events_lost : unit -> int
 end
 
 type origin

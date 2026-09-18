@@ -8,6 +8,8 @@ module Lost_events = struct
 
   let were_events_lost () = !lost_words_count > 0
 
+  let events_lost () = !lost_words_count
+
   let display () =
     if were_events_lost () then begin
       Printf.eprintf "Lost %d ring buffer words, stats not reliable%s\n%!"
