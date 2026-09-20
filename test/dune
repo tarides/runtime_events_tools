@@ -78,13 +78,18 @@
  (modules run_crash)
  (libraries unix))
 
+(executables
+ (names run_slow_start)
+ (modules run_slow_start)
+ (libraries unix runtime_events))
+
 (test
  (name test_launch)
  (modules test_launch)
  (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
- (libraries olly_common alcotest)
- (deps run_endlessly.exe)
+ (libraries olly_common alcotest unix runtime_events)
+ (deps run_endlessly.exe run_slow_start.exe)
  (action
   (run %{test} --show-errors)))

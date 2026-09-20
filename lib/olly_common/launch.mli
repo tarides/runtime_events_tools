@@ -21,6 +21,21 @@ exception Fail of string
    without going through [olly]. *)
 val exec_process : runtime_events_config -> string list -> subprocess
 
+val create_cursor_when_ready :
+  dir:string ->
+  pid:int ->
+  handle:Platform.handle ->
+  executable:string ->
+  Runtime_events.cursor
+(** Wait for the child [handle] to initialise its ring buffer and return a
+    cursor on it. Raises [Fail] if the child dies first, or does not initialise
+    it in time.
+
+    Also exposed for [test_launch], which drives it with a child whose ring
+    buffer appears late. That cannot be arranged through [exec_process], which
+    always sets OCAML_RUNTIME_EVENTS_START, and so has the runtime create the
+    ring buffer before the child runs any code of its own. *)
+
 type 'r acceptor_fn = int -> Runtime_events.Timestamp.t -> 'r
 
 type consumer_config = {
