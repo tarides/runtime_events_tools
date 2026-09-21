@@ -1,5 +1,6 @@
 module Lost_events : sig
   val were_events_lost : unit -> bool
+  val event_words_lost : unit -> int
 end
 
 type origin
@@ -53,5 +54,7 @@ type consumer_config = {
   runtime_events_log_wsize : int option;
 }
 
+val events_start_timestamp_ns : unit -> int64
+val events_done_timestamp_ns : unit -> int64
 val empty_config : consumer_config
 val olly : consumer_config -> exec_config -> unit

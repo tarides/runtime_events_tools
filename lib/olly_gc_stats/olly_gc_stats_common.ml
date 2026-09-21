@@ -1,7 +1,11 @@
 module H = Hdr_histogram
 module Ts = Runtime_events.Timestamp
 
-type ts = { mutable start_time : float; mutable end_time : float }
+type ts = {
+  mutable start_time : float;
+  mutable end_time : float;
+  mutable reliable : bool;
+}
 
 (* Maximum number of domains that can be active concurrently.
    Defaults to 128 on 64-bit platforms and 16 on 32-bit platforms.
@@ -25,8 +29,13 @@ let make_hist () =
 let highest_trackable_value = 1 lsl 34
 
 (* Mutable stats *)
-let wall_time = { start_time = 0.; end_time = 0. }
-let domain_elapsed_times = Array.make number_domains 0.
+let wall_time = { start_time = 0.; end_time = 0.; reliable = false }
+
+let domain_times =
+  (* mutable datastructure, use Array.init *)
+  Array.init number_domains (fun _ ->
+      { start_time = 0.; end_time = 0.; reliable = false })
+
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
 let domain_promoted_words = Array.make number_domains 0
@@ -39,6 +48,23 @@ let compactions = ref 0
 let to_sec x = float_of_int x /. 1_000_000_000.
 let ms ns = ns /. 1_000_000.
 let mean_latency hist = H.mean hist |> ms
+
+let elapsed t =
+  if (not t.reliable) && t.start_time < Float.epsilon then 0.
+  else
+    let end_time =
+      if t.reliable then t.end_time
+      else
+        Olly_common.Launch.events_done_timestamp_ns () |> Int64.to_int |> to_sec
+    and start_time =
+      if t.start_time < Float.epsilon then
+        Olly_common.Launch.events_start_timestamp_ns ()
+        |> Int64.to_int |> to_sec
+      else t.start_time
+    in
+    end_time -. start_time
+
+let domain_elapsed_times () = domain_times |> Array.map elapsed
 
 let max_latency hist outliers =
   float_of_int (max (H.max hist) outliers.max) |> ms
@@ -56,18 +82,22 @@ let record_latency hist outliers latency =
     outliers.total <- outliers.total + latency;
     if latency > outliers.max then outliers.max <- latency)
 
+let set_end_time t ts =
+  t.end_time <- ts;
+  t.reliable <- t.end_time >= t.start_time
+
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
   match lifecycle_event with
   | Runtime_events.EV_RING_START ->
       wall_time.start_time <- ts;
-      domain_elapsed_times.(domain_id) <- ts
+      domain_times.(domain_id).start_time <- ts
   | Runtime_events.EV_RING_STOP ->
-      wall_time.end_time <- ts;
-      domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
-  | Runtime_events.EV_DOMAIN_SPAWN -> domain_elapsed_times.(domain_id) <- ts
+      set_end_time wall_time ts;
+      set_end_time domain_times.(domain_id) ts
+  | Runtime_events.EV_DOMAIN_SPAWN -> domain_times.(domain_id).start_time <- ts
   | Runtime_events.EV_DOMAIN_TERMINATE ->
-      domain_elapsed_times.(domain_id) <- ts -. domain_elapsed_times.(domain_id)
+      set_end_time domain_times.(domain_id) ts
   | _ -> ()
 
 let print_table oc (data : string list list) =
@@ -139,17 +169,17 @@ let print_latency_only json output hist outliers =
         Printf.fprintf oc "%.4f \t %.2f\n" p
           (float_of_int (H.value_at_percentile hist p) |> ms)))
 
+let is_gc_phase = function
+  | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
+  | Runtime_events.EV_STW_HANDLER | Runtime_events.EV_MINOR
+  | Runtime_events.EV_INTERRUPT_REMOTE ->
+      true
+  | _ -> false
+
 let latency poll_sleep json output runtime_events_dir exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
   let runtime_begin ring_id ts phase =
     if is_gc_phase phase then
       match Hashtbl.find_opt current_event ring_id with
@@ -376,3 +406,24 @@ let validate_gc_stats jsonlines files =
        res
   in
   if not (List.for_all Result.is_ok res) then exit Cmdliner.Cmd.Exit.some_error
+
+let stats_reliable () =
+  let domain_times_reliable =
+    domain_times
+    |> Array.mapi (fun i t -> (i, t))
+    |> Array.for_all (fun (i, t) ->
+        if (not t.reliable) && elapsed t > 0. then begin
+          Format.eprintf
+            "[Olly] Warning: Domain %d: elapsed time was approximated: %gs. \
+             Recorded start:%fs, stop:%fs@."
+            i (elapsed t) t.start_time t.end_time;
+          false
+        end
+        else true)
+  in
+  if not wall_time.reliable then
+    Format.eprintf
+      "[Olly] Warning: wall time was approximated, start:%fs, stop:%fs@."
+      wall_time.start_time wall_time.end_time;
+  (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
+  && domain_times_reliable && wall_time.reliable

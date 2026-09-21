@@ -79,10 +79,11 @@ let print_percentiles json output hist outliers =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let real_time = wall_time.end_time -. wall_time.start_time in
+  let real_time = elapsed wall_time in
   let total_gc_time = to_sec @@ Array.fold_left ( + ) 0 domain_gc_times in
 
   let total_cpu_time = ref 0. in
+  let domain_elapsed_times = domain_elapsed_times () in
   let ap = Array.combine domain_elapsed_times domain_gc_times in
   Array.iteri
     (fun i (cpu_time, gc_time) ->
@@ -193,8 +194,8 @@ let print_percentiles json output hist outliers =
             forced_major = !forced_major_collections;
             compactions = !compactions;
           };
-        stats_reliable =
-          not @@ Olly_common.Launch.Lost_events.were_events_lost ();
+        event_words_lost = Olly_common.Launch.Lost_events.event_words_lost ();
+        stats_reliable = stats_reliable ();
       }
     |> Json.(print oc Gc_stats.jsont)
   else (
@@ -249,20 +250,14 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "Minor Gen: %i collections\n" !minor_collections;
     Printf.fprintf oc "Major Gen: %i collections %i forced collections\n"
       !major_collections !forced_major_collections;
-    Printf.fprintf oc "Compactions: %i\n" !compactions)
+    Printf.fprintf oc "Compactions: %i\n" !compactions;
+    Printf.fprintf oc "Stats reliable: %b\n" (stats_reliable ()))
 
 let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
     runtime_events_log_wsize exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
   let runtime_begin ring_id ts phase =
     (* The EV_EXPLICIT_GC_* spans wrap a user call to Gc.compact, Gc.major or
        Gc.full_major, and are emitted only on the domain that made the call, so
