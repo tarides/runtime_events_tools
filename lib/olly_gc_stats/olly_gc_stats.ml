@@ -63,6 +63,21 @@ let gc_stats_cmd =
         $ proc_stat_freq_option $ freq_option $ json_option $ output_option
         $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 0))
 
+let validate_gc_stats_cmd =
+  let open Cmdliner in
+  (*  let open Olly_common.Cli in*)
+  let info = Cmd.info "validate-gc-stats" in
+  let doc = "The JSON file to validate" in
+  let open Term.Syntax in
+  Cmd.v info
+  @@
+  let+ files = Arg.(value & pos_all filepath [] & info [] ~doc ~docv:"JSONFILE")
+  and+ jsonlines =
+    let doc = "Input is in JSON Lines format" in
+    Arg.(value & flag & info [ "jsonlines" ] ~doc)
+  in
+  Olly_gc_impl.validate_gc_stats jsonlines files
+
 let latency_cmd =
   let open Cmdliner in
   let open Olly_common.Cli in
@@ -99,3 +114,5 @@ let latency_cmd =
       ret
         (const Olly_gc_impl.latency $ freq_option $ json_option $ output_option
        $ runtime_events_dir $ exec_args 0))
+
+module Json = Json

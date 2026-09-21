@@ -16,6 +16,8 @@ Top-level help shows all subcommands including latency:
          trace [OPTION]… TRACEFILE [EXECUTABLE]…
              Save the runtime trace to file.
   
+         validate-gc-stats [--jsonlines] [OPTION]… [JSONFILE]…
+  
   COMMON OPTIONS
          --help[=FMT] (default=auto)
              Show this help in format FMT. The value FMT must be one of auto,

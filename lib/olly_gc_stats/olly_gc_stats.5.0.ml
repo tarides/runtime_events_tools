@@ -27,10 +27,11 @@ let print_percentiles json output hist outliers =
     |]
   in
   let oc = match output with Some s -> open_out s | None -> stderr in
-  let real_time = wall_time.end_time -. wall_time.start_time in
+  let real_time = elapsed wall_time in
   let total_gc_time = to_sec @@ Array.fold_left ( + ) 0 domain_gc_times in
 
   let total_cpu_time = ref 0. in
+  let domain_elapsed_times = domain_elapsed_times () in
   let ap = Array.combine domain_elapsed_times domain_gc_times in
   Array.iteri
     (fun i (cpu_time, gc_time) ->
@@ -55,71 +56,68 @@ let print_percentiles json output hist outliers =
   let promoted_pct = !promoted_words /. !minor_words *. 100.0 in
 
   if json then
-    let distribs =
-      List.init (Array.length percentiles) (fun i ->
-          let percentile = percentiles.(i) in
+    let distr_latency =
+      percentiles |> Array.to_seq
+      |> Seq.map (fun percentile ->
           let value =
-            H.value_at_percentile hist percentiles.(i)
-            |> float_of_int |> ms |> string_of_float
+            H.value_at_percentile hist percentile |> float_of_int |> ms
           in
-          Printf.sprintf "\"%.4f\": %s" percentile value)
-      |> String.concat ","
+          (Printf.sprintf "%.4f" percentile, value))
+      |> List.of_seq
     in
     let domain_stats =
-      let buf = Buffer.create 256 in
-      Array.iteri
-        (fun i (c, g) ->
-          if c > 0. then (
-            if Buffer.length buf > 0 then Buffer.add_char buf ',';
-            Buffer.add_string buf
-              (Printf.sprintf
-                 {|"%d": {"wall_time": %.2f, "gc_time": %.2f, "gc_overhead": %.2f}|}
-                 i c (to_sec g)
-                 (to_sec g *. 100. /. c))))
-        (Array.combine domain_elapsed_times domain_gc_times);
-      Buffer.contents buf
+      Seq.zip (Array.to_seq domain_elapsed_times) (Array.to_seq domain_gc_times)
+      |> Seq.filter (fun (c, _) -> c > 0.)
+      |> Seq.mapi (fun i (c, g) ->
+          ( string_of_int i,
+            Json.Gc_stats.
+              {
+                wall_time = c;
+                gc_time = to_sec g;
+                gc_overhead = to_sec g *. 100. /. c;
+              } ))
+      |> List.of_seq
     in
-    Printf.fprintf oc
-      {|{       
-  "version": 2,       
-  "wall_time": %.2f,       
-  "cpu_time": %.2f,       
-  "gc_time": %.2f,       
-  "gc_overhead": %.2f,       
-  "max_rss_kb": %d,       
-  "domain_stats": {%s},       
-  "mean_latency": %f,       
-  "stddev_latency": %f,       
-  "min_latency": %.2f,       
-  "max_latency": %f,       
-  "distr_latency": {%s},       
-  "outliers": {       
-    "count": %d,       
-    "mean_latency": %f,       
-    "max_latency": %f
-  },       
-  "allocations": {       
-    "total_heap": %.0f,       
-    "minor_heap": %.0f,       
-    "promoted_words": %.0f,       
-    "promoted_pct": %.2f
-  },       
-  "collections": {       
-    "minor": %i,       
-    "major": %i,       
-    "forced_major": %i,       
-    "compactions": %i
-  },       
-  "stats_reliable": %b
-}|}
-      real_time !total_cpu_time total_gc_time gc_overhead
-      (Olly_common.Process_poller.peak_rss ())
-      domain_stats mean_latency stddev_latency min_latency max_latency distribs
-      outliers.count outlier_mean_ms
-      (float_of_int outliers.max |> ms)
-      total_heap !minor_words !promoted_words promoted_pct !minor_collections
-      !major_collections !forced_major_collections !compactions
-      (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
+    Json.Gc_stats.
+      {
+        version = current_version;
+        wall_time = real_time;
+        cpu_time = !total_cpu_time;
+        gc_time = total_gc_time;
+        gc_overhead;
+        max_rss_kb = Olly_common.Process_poller.peak_rss ();
+        domain_stats;
+        mean_latency;
+        stddev_latency;
+        min_latency;
+        max_latency;
+        distr_latency;
+        outliers =
+          {
+            count = outliers.count;
+            mean_latency = outlier_mean_ms;
+            max_latency = outliers.max |> float_of_int |> ms;
+          };
+        allocations =
+          {
+            total_heap;
+            minor_heap = !minor_words;
+            major_heap = None;
+            promoted_words = !promoted_words;
+            promoted_pct;
+          };
+        domain_alloc_stats = None;
+        collections =
+          {
+            minor = !minor_collections;
+            major = !major_collections;
+            forced_major = !forced_major_collections;
+            compactions = !compactions;
+          };
+        event_words_lost = Olly_common.Launch.Lost_events.event_words_lost ();
+        stats_reliable = stats_reliable ();
+      }
+    |> Json.(print oc Gc_stats.jsont)
   else (
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Execution times:\n";
@@ -183,16 +181,13 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
-  let is_gc_phase phase =
-    match phase with
-    | Runtime_events.EV_MAJOR | Runtime_events.EV_STW_LEADER
-    | Runtime_events.EV_INTERRUPT_REMOTE ->
-        true
-    | _ -> false
-  in
   let runtime_begin ring_id ts phase =
-    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT && ring_id == 0 then
-      incr compactions;
+    (* The EV_EXPLICIT_GC_* spans wrap a user call to Gc.compact, Gc.major or
+       Gc.full_major, and are emitted only on the domain that made the call, so
+       they are counted whichever domain that is. EV_MINOR and EV_MAJOR_GC_STW
+       below are global stop-the-world points that every live domain emits once
+       per cycle, so counting ring 0 alone yields the cycle count. *)
+    if phase == Runtime_events.EV_EXPLICIT_GC_COMPACT then incr compactions;
 
     if phase == Runtime_events.EV_MINOR && ring_id == 0 then
       incr minor_collections;
@@ -204,9 +199,8 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
       incr major_collections;
 
     if
-      (phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
-      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR)
-      && ring_id == 0
+      phase == Runtime_events.EV_EXPLICIT_GC_MAJOR
+      || phase == Runtime_events.EV_EXPLICIT_GC_FULL_MAJOR
     then incr forced_major_collections;
 
     if is_gc_phase phase then

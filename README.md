@@ -116,7 +116,7 @@ Traces in either formats can be viewed in [perfetto trace viewer](https://ui.per
 
 ## Missed events
 
-If olly does not read a domain's ring buffer fast enough then some events will be lost, which is reported as `[ring_id=6] Lost 1584944 events`. If this occurs the results from olly *may* be inaccurate. There are several ways to fix this:
+If olly does not read a domain's ring buffer fast enough then some events will be lost, which is reported as `[ring_id=6] Lost 1584944 ring buffer words, stats not reliable`. If this occurs the results from olly *may* be inaccurate. There are several ways to fix this:
 
 1. Use `--freq` option to make olly read the ring buffer more frequently.
 2. Set `OCAMLRUNPARAM=e=20` to increase the size of the ring buffer.

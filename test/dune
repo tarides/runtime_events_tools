@@ -5,6 +5,15 @@
  (modules test_gc_stats))
 
 (executable
+ (name run_domain_gc)
+ (modules run_domain_gc))
+
+(executable
+ (name test_gc_no_outliers)
+ (modules test_gc_no_outliers)
+ (libraries olly_gc_stats))
+
+(executable
  (name test_fib)
  (modules test_fib)
  (enabled_if
@@ -78,13 +87,18 @@
  (modules run_crash)
  (libraries unix))
 
+(executables
+ (names run_slow_start)
+ (modules run_slow_start)
+ (libraries unix runtime_events))
+
 (test
  (name test_launch)
  (modules test_launch)
  (package runtime_events_tools)
  (enabled_if
   (>= %{ocaml_version} 5.1.0))
- (libraries olly_common alcotest)
- (deps run_endlessly.exe)
+ (libraries olly_common alcotest unix runtime_events)
+ (deps run_endlessly.exe run_slow_start.exe)
  (action
   (run %{test} --show-errors)))

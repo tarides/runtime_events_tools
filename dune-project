@@ -18,8 +18,11 @@
  (maintenance_intent "(latest)")
  (depends
   (ocaml (>= "5.0.0~"))
-  hdr_histogram
+  (hdr_histogram (>= "0.0.6"))
   (cmdliner (>= 2.0.0))
+  (bytesrw (>= 0.4.0))
+  (jsont (>= 0.4.0))
+  (ppx_deriving_jsont (and :with-dev-setup (>= 0.2.1)))
   (trace-fuchsia (>= 0.11))
   (trace (>= 0.11))
   (menhir :with-test)
