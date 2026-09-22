@@ -309,11 +309,11 @@ let validate_domain_alloc_stats t opt =
   | None, false -> Ok ()
   | Some stats, _ -> validate_assoc_map t validate_domain_alloc_stat stats
 
-let current_version = 2
+let current_version = 3
 
 let validate_json (t : Json.Gc_stats.t) =
   let domains = List.length t.domain_stats in
-  check_range "1 <= version <= 2" Format.pp_print_int ~lo:1 ~hi:current_version
+  check_range "1 <= version <= 3" Format.pp_print_int ~lo:1 ~hi:current_version
     t.version
   &&& check_range "0 <= cpu_time <= wall_time*domains" pp_s ~lo:0.
         ~hi:(t.wall_time *. float_of_int domains)
