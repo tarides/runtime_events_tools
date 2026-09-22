@@ -53,7 +53,7 @@ let gc_stats_cmd =
            runtime events ring buffer is mapped into the child, and is \
            routinely much larger than the program's own live memory, so its \
            resident pages are excluded from this figure where the platform \
-           permits it. Currently that is Linux only; elsewhere the figure \
+           permits it. Currently that is Linux and macOS; elsewhere the figure \
            still includes the ring, which the human-readable output says and \
            the json output reports as $(b,max_rss_excludes_ring)." );
       `Blocks help_secs;
