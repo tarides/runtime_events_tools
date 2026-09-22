@@ -22,7 +22,7 @@
  * One function rather than two because the numbers are not
  * independent on all platforms.
  *
- * Neither number is a peak: both platforms that implement this report
+ * Neither number is a peak: every platform that implements this reports
  * the RSS as it is at the sample, and the caller tracks the peak of the
  * difference.  That is forced rather than chosen — see the Linux arm.
  *
@@ -362,6 +362,280 @@ static struct rss_sample platform_sample(int pid, const char *ring_file) {
   return s;
 }
 
+#elif defined(_WIN32)
+
+/* Take the [K32] entry points in kernel32 rather than the psapi.dll
+ * forwarders of the same names, so that nothing beyond what the OCaml
+ * runtime already links has to be linked.  Both toolchains key that off
+ * PSAPI_VERSION, and it has to be set before <psapi.h> is first seen. */
+#define PSAPI_VERSION 2
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <windows.h>
+#include <psapi.h>
+
+/* Size of the buffer a path is copied into.  [PATH_MAX] is what the other 
+ * arms take, but here it is 260.  We decline paths longer than this.
+ */
+#define OLLY_PATH_MAX 4096
+
+/* The NT path ("\Device\HarddiskVolumeN\...") of the file at [path], or
+ * 0 if it could not be taken.  That is needed for [GetMappedFileNameW].
+ *
+ * This is the Windows counterpart of the [stat] the other arms do in order
+ * to canonicalize the path. 
+ *
+ * Opened for no access at all, which is all the name needs, and shared
+ * every way, since the child holds the file mapped and olly's own cursor
+ * has it open too. */
+static int nt_path_of(const wchar_t *path, wchar_t *out, DWORD out_len) {
+  HANDLE h;
+  DWORD n;
+
+  h = CreateFileW(path, 0,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (h == INVALID_HANDLE_VALUE)
+    return 0;
+  n = GetFinalPathNameByHandleW(h, out, out_len,
+                                FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+  CloseHandle(h);
+  return n > 0 && n < out_len;
+}
+
+/* Whether the region at [addr] in [proc] is backed by the file whose NT
+ * path is [nt_path].
+ *
+ * [GetMappedFileNameW] reports how much it wrote rather than how much it
+ * needed, so a name too long for the buffer comes back truncated, and
+ * filling the buffer is the only sign of it.  Reject that rather than
+ * compare a prefix: a ring whose path does not fit is one we decline to
+ * attribute, which the caller already has to cope with.
+ *
+ * [CompareStringOrdinal] rather than [_wcsicmp] for case-insensitive 
+ * comparison. */
+static int region_backed_by(HANDLE proc, LPVOID addr, const wchar_t *nt_path) {
+  wchar_t name[OLLY_PATH_MAX];
+  DWORD n = GetMappedFileNameW(proc, addr, name, OLLY_PATH_MAX);
+
+  return n > 0 && n < OLLY_PATH_MAX &&
+         CompareStringOrdinal(name, -1, nt_path, -1, TRUE) == CSTR_EQUAL;
+}
+
+/* The address range of the mapping of [nt_path] in [proc], or 0 if there
+ * is no such mapping.
+ *
+ * Walks the process's regions in ascending address order and asks each
+ * mapped one which file backs it.
+ *
+ * One [MapViewOfFile] is one allocation, but [VirtualProtect] can split
+ * it into several regions, so take the extent from the allocation base
+ * that those regions share rather than naming the file again for each.
+ * That also gives the view's true start, which is at or below the region
+ * that happened to name it. */
+static int ring_range(HANDLE proc, const wchar_t *nt_path, uintptr_t *lo,
+                      uintptr_t *hi) {
+  MEMORY_BASIC_INFORMATION mbi;
+  uintptr_t addr = 0;
+  void *view = NULL;
+  int found = 0;
+
+  *lo = 0;
+  *hi = 0;
+
+  while (VirtualQueryEx(proc, (LPCVOID)addr, &mbi, sizeof(mbi)) ==
+         sizeof(mbi)) {
+    uintptr_t next = (uintptr_t)mbi.BaseAddress + (uintptr_t)mbi.RegionSize;
+
+    if (found) {
+      if (mbi.AllocationBase != view)
+        break; /* past the last region of the view */
+      *hi = next;
+    } else if (mbi.State == MEM_COMMIT && mbi.Type == MEM_MAPPED &&
+               region_backed_by(proc, mbi.BaseAddress, nt_path)) {
+      found = 1;
+      view = mbi.AllocationBase;
+      *lo = (uintptr_t)mbi.AllocationBase;
+      *hi = next;
+    }
+
+    if (next <= addr)
+      break; /* no progress: bail out */
+    addr = next;
+  }
+  return found;
+}
+
+/* Resident kB of [proc]'s pages over [lo, hi), or -1 if they could not be
+ * read.
+ *
+ * [QueryWorkingSet] hands back the process's whole working set, one entry
+ * per resident page; keep the ones that fall in the range.  That is the
+ * same set of pages [GetProcessMemoryInfo] returns the size of, so the
+ * ring's kB are a subset of the working set's by construction and the
+ * subtraction the caller performs is exact rather than an estimate across
+ * two accountings, exactly as on Linux.
+ *
+ * [QueryWorkingSetEx] would work but it costs a query per page of the 
+ * mapping, where this costs one per resident page and this can make 
+ * a considerable perf difference.
+ */
+
+/* Entries to ask for beyond what is known to be needed, so that a working
+ * set which grew by a little since the last sample does not cost a second
+ * call. */
+#define WORKING_SET_SLACK 4096
+
+/* The buffer has to hold the whole working set at once, so a call that
+ * finds it too small reports what it needed and we go again.  Bounded
+ * because a process whose working set keeps growing must not be able to
+ * keep us here. */
+#define WORKING_SET_ATTEMPTS 8
+
+/* Grown as needed and kept between samples: only the poller domain calls
+ * in here, for one process per run, so one buffer does for the whole run
+ * and there is no point freeing it before exit. 
+ * 
+ * NB regarding sizing the region to hold the structure: it's a number
+ * plus an array. 
+ * typedef struct _PSAPI_WORKING_SET_INFORMATION {
+ *   ULONG_PTR               NumberOfEntries;   
+ *   PSAPI_WORKING_SET_BLOCK WorkingSetInfo[1]; 
+ *   PSAPI_WORKING_SET_INFORMATION; }
+ * */
+static PSAPI_WORKING_SET_INFORMATION *ws_buf = NULL;
+static size_t ws_buf_entries = 0;
+
+/* Make [ws_buf] hold at least [entries], leaving it as it was on failure. */
+static int ws_reserve(size_t entries) {
+  PSAPI_WORKING_SET_INFORMATION *grown;
+
+  if (entries <= ws_buf_entries)
+    return 1;
+  grown = realloc(ws_buf, sizeof(*grown) +
+                              entries * sizeof(grown->WorkingSetInfo[0]));
+  if (grown == NULL)
+    return 0;
+  ws_buf = grown;
+  ws_buf_entries = entries;
+  return 1;
+}
+
+static long working_set_resident_kb(HANDLE proc, uintptr_t lo, uintptr_t hi) {
+  SYSTEM_INFO si;
+
+  GetSystemInfo(&si);
+
+  long page_kb = (long)(si.dwPageSize / 1024);
+
+  if (ws_buf == NULL && !ws_reserve(WORKING_SET_SLACK))
+    return -1;
+
+  for (int attempt = 0; attempt < WORKING_SET_ATTEMPTS; attempt++) {
+    long present = 0;
+
+    if (QueryWorkingSet(proc, ws_buf,
+                        (DWORD)(sizeof(*ws_buf) +
+                        ws_buf_entries * sizeof(ws_buf->WorkingSetInfo[0])))) {
+      for (ULONG_PTR i = 0; i < ws_buf->NumberOfEntries; i++) {
+        uintptr_t page = (uintptr_t)ws_buf->WorkingSetInfo[i].VirtualPage *
+                         (uintptr_t)si.dwPageSize;
+        if (page >= lo && page < hi)
+          present++;
+      }
+      return present * page_kb;
+    }
+    if (GetLastError() != ERROR_BAD_LENGTH)
+      return -1; /* the process is gone, or we may not read it */
+
+    /* The failing call wrote [NumberOfEntries] with the count it wanted,
+     * necessarily past the capacity that just failed, so each retry
+     * strictly grows the buffer.  Retrying at all because the working set
+     * can grow again between the call that sizes the buffer and the call
+     * that fills it.  We add the slack to reduce the number of retries. */
+    if (!ws_reserve((size_t)ws_buf->NumberOfEntries + WORKING_SET_SLACK))
+      return -1;
+  }
+  return -1;
+}
+
+/* Where the ring was last seen.  Only the poller domain calls in here,
+ * for one process per run.  The view is mapped once and never moves, so
+ * the region walk can be done only once. */
+static DWORD ring_hint_pid = 0;
+static uintptr_t ring_hint_lo = 0;
+static uintptr_t ring_hint_hi = 0;
+
+static long ring_resident_kb(HANDLE proc, DWORD pid, const char *ring_file) {
+  uintptr_t lo = 0, hi = 0;
+
+  if (ring_hint_pid == pid) {
+    lo = ring_hint_lo;
+    hi = ring_hint_hi;
+  } else {
+    wchar_t wide[OLLY_PATH_MAX];
+    wchar_t nt[OLLY_PATH_MAX];
+
+    /* OCaml holds a path as UTF-8 on Windows, whatever the ANSI code page
+     * is, and widens it at the Win32 boundary; do the same. */
+    if (!MultiByteToWideChar(CP_UTF8, 0, ring_file, -1, wide, OLLY_PATH_MAX))
+      return -1;
+    if (!nt_path_of(wide, nt, OLLY_PATH_MAX))
+      return -1;
+    if (!ring_range(proc, nt, &lo, &hi))
+      return -1;
+    ring_hint_pid = pid;
+    ring_hint_lo = lo;
+    ring_hint_hi = hi;
+  }
+  return working_set_resident_kb(proc, lo, hi);
+}
+
+static struct rss_sample platform_sample(int pid, const char *ring_file) {
+  struct rss_sample s = {0, -1};
+  PROCESS_MEMORY_COUNTERS pmc;
+  DWORD exit_code;
+
+  /* [GetMappedFileNameW] wants PROCESS_VM_READ on top of the
+   * PROCESS_QUERY_INFORMATION the other calls need. */
+  HANDLE proc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE,
+                            (DWORD)pid);
+  if (proc == NULL)
+    return s;
+
+  /* Sample the ring before the working set, for the reason the Linux arm
+   * gives. */
+  if (ring_file)
+    s.ring_kb = ring_resident_kb(proc, (DWORD)pid, ring_file);
+  if (GetProcessMemoryInfo(proc, &pmc, sizeof(pmc))) {
+    /* PeakWorkingSetSize is a peak the kernel maintains exactly, so
+     * report it where the ring cannot be taken out; where it can, report
+     * the working set as it is and let the caller take the peak of the
+     * difference. */
+    SIZE_T bytes =
+        (s.ring_kb >= 0) ? pmc.WorkingSetSize : pmc.PeakWorkingSetSize;
+    s.rss_kb = (long)(bytes / 1024);
+  }
+
+  /* [GetProcessMemoryInfo] keeps answering for a process that has exited
+   * while a handle to it is still open, with a residual working set and
+   * the peak it reached, where everything that reads the address space
+   * starts failing with ERROR_ACCESS_DENIED.  Left alone, that pair would
+   * mark the whole run as not having excluded the ring.  So report "could
+   * not read" instead, which is what the other arms report once the
+   * process is gone, and which the caller drops.
+   *
+   * Checked after the numbers were read, not before: a check beforehand
+   * leaves exactly the window this closes. */
+  if (!GetExitCodeProcess(proc, &exit_code) || exit_code != STILL_ACTIVE) {
+    s.rss_kb = 0;
+    s.ring_kb = -1;
+  }
+  CloseHandle(proc);
+  return s;
+}
+
 #elif defined(__FreeBSD__)
 
 #include <sys/types.h>
@@ -395,11 +669,17 @@ static struct rss_sample platform_sample(int pid, const char *ring_file) {
 
 #endif
 
+/* Every arm but Windows, whose paths [PATH_MAX] does not bound, takes
+ * that bound for the path below. */
+#ifndef OLLY_PATH_MAX
+#define OLLY_PATH_MAX PATH_MAX
+#endif
+
 CAMLprim value olly_rss_and_ring_kb(value v_pid, value v_ring_file) {
   CAMLparam2(v_pid, v_ring_file);
   CAMLlocal1(res);
   int pid = Int_val(v_pid);
-  char ring_file[PATH_MAX];
+  char ring_file[OLLY_PATH_MAX];
   const char *ring_arg = NULL;
   struct rss_sample s;
   size_t len;
