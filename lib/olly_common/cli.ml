@@ -42,8 +42,8 @@ let proc_stat_freq_option =
      domain, independently of $(b,--freq). The value must be positive. The \
      peak is the maximum RSS over samples, less the resident pages of the \
      runtime events ring buffer where they can be attributed to it (currently \
-     on Linux and OSX only). A shorter interval lowers the chance of missing a \
-     transient peak, at the cost of more sampling overhead."
+     on Linux, OSX and Windows only). A shorter interval lowers the chance of \
+     missing a transient peak, at the cost of more sampling overhead."
   in
   Arg.(
     value
