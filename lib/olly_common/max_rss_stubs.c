@@ -22,16 +22,13 @@
  * One function rather than two because the numbers are not
  * independent on all platforms.
  *
- * Neither number is a peak: the platform that implements this reports
+ * Neither number is a peak: both platforms that implement this report
  * the RSS as it is at the sample, and the caller tracks the peak of the
  * difference.  That is forced rather than chosen — see the Linux arm.
  *
- * Only Linux identifies the ring so far.  On macOS the per-region
- * breakdown of proc_pidinfo(PROC_PIDREGIONPATHINFO) would locate it; on
- * FreeBSD, struct kinfo_proc has ki_rssize (RSS) and ki_size (total VM)
- * but not a heap/stack split, and libprocstat would give the per-mapping
- * breakdown needed.  Neither is attempted here, so both leave the ring
- * in.
+ * On FreeBSD, struct kinfo_proc has ki_rssize (RSS) and ki_size (total
+ * VM) but not a heap/stack split; libprocstat would give the per-mapping
+ * breakdown needed to locate the ring.
  */
 
 #include <caml/alloc.h>
@@ -103,7 +100,7 @@ static void status_rss_kb(int pid, long *rss_kb, long *hwm_kb) {
  * once the file has been unlinked.  
  *
  * One mmap is one VMA, but mprotect and madvise can split it, so scan
- * over the consecutive matching ones. */
+ * over the consecutive matching ones as the macOS arm does. */
 static int ring_range(int pid, const char *ring_file, unsigned long *lo,
                       unsigned long *hi) {
   char path[64];
@@ -273,14 +270,93 @@ static struct rss_sample platform_sample(int pid, const char *ring_file) {
 
 #include <libproc.h>
 #include <sys/proc_info.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-/* proc_pidinfo(PROC_PIDREGIONPATHINFO) reports the per-region breakdown
- * that would locate the ring; until it is used, the ring is left in. */
+/* Resident kB of the VM regions of [pid] that are backed by the vnode
+ * (dev, ino) and lie at or above [from], or -1 if there is no such
+ * region.  On success [*found_at] is the address of the first one.
+ *
+ * Regions are matched on their backing vnode rather than on
+ * prp_vip.vip_path, which holds only the "tail end" of long paths and
+ * need not be spelled the way the caller spelled it.  A large mapping
+ * can be split across several adjacent regions, so sum over all of the
+ * consecutive matching ones. */
+static long vnode_resident_kb(int pid, uint64_t from, uint32_t dev,
+                              uint64_t ino, uint64_t *found_at) {
+  long page_kb = getpagesize() / 1024;
+  uint64_t addr = from;
+  long total = 0;
+  int found = 0;
+
+  for (;;) {
+    struct proc_regionwithpathinfo r;
+    uint64_t next;
+
+    if (proc_pidinfo(pid, PROC_PIDREGIONPATHINFO, addr, &r, sizeof(r)) <= 0)
+      break; /* past the last region, or the process is gone */
+    if (r.prp_vip.vip_vi.vi_stat.vst_dev == dev &&
+        r.prp_vip.vip_vi.vi_stat.vst_ino == ino) {
+      if (!found) {
+        found = 1;
+        *found_at = r.prp_prinfo.pri_address;
+      }
+      total += (long)r.prp_prinfo.pri_pages_resident * page_kb;
+    } else if (found)
+      break; /* past the last matching region */
+
+    next = r.prp_prinfo.pri_address + r.prp_prinfo.pri_size;
+    if (next <= addr)
+      break; /* no progress: bail out rather than spin */
+
+    addr = next;
+  }
+  return found ? total : -1;
+}
+
+/* Where the ring was last seen.  Only the poller domain calls in here,
+ * for one process per run. */
+static int ring_hint_pid = 0;
+static uint64_t ring_hint_addr = 0;
+
+/* Counting a region's resident pages costs the kernel a walk of its page
+ * list (~0.35ms for a 256MB-resident ring), and reaching the region at
+ * all costs a walk of every region below it (~1ms).  The ring's mapping
+ * never moves, so remember where it was and start there next time,
+ * falling back to the full walk if it is no longer at that address. */
+static long ring_kb(int pid, const char *ring_file) {
+  struct stat st;
+
+  /* [stat] rather than a string comparison against the region's path:
+   * this resolves symlinks, so the directory olly was given need not be
+   * the canonical one. */
+  if (stat(ring_file, &st) != 0)
+    return -1;
+
+  uint32_t dev = (uint32_t)st.st_dev;
+  uint64_t ino = (uint64_t)st.st_ino;
+  uint64_t hint = (ring_hint_pid == pid) ? ring_hint_addr : 0;
+  uint64_t found_at = 0;
+  long total = -1;
+
+  if (hint != 0)
+    total = vnode_resident_kb(pid, hint, dev, ino, &found_at);
+  if (total < 0)
+    total = vnode_resident_kb(pid, 0, dev, ino, &found_at);
+
+  if (total >= 0) {
+    ring_hint_pid = pid;
+    ring_hint_addr = found_at;
+  }
+  return total;  
+}
+
 static struct rss_sample platform_sample(int pid, const char *ring_file) {
   struct rss_sample s = {0, -1};
   struct proc_taskinfo ti;
 
-  (void)ring_file;
+  if (ring_file)
+    s.ring_kb = ring_kb(pid, ring_file);
   if (proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &ti, sizeof(ti)) > 0)
     s.rss_kb = (long)(ti.pti_resident_size / 1024);
   return s;
