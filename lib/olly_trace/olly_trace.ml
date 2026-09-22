@@ -59,7 +59,13 @@ let trace_cmd format_list =
   in
 
   let emit_counter =
-    let doc = "Emit runtime counter events." in
+    let doc =
+      "Emit runtime counter events. All counters defined by the OCaml runtime \
+       in use are emitted, so the set varies by OCaml version. See \
+       https://ocaml.org/manual/runtime-tracing.html and \
+       https://ocaml.org/manual/latest/api/Runtime_events.html for what each \
+       counter measures."
+    in
     Arg.(value & flag & info [ "c"; "emit-counters" ] ~doc)
   in
 
