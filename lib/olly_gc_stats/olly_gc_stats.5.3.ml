@@ -2,6 +2,29 @@ include Olly_gc_stats_common
 
 let domain_major_words = Array.make number_domains 0
 
+let live_stats () =
+  let words = !domain_pools_words
+  and live_words = !domain_pools_live_words
+  and frag_words = !domain_pools_frag_words in
+  let major_pools =
+    Json.Gc_stats.
+      {
+        words;
+        live_words;
+        frag_words;
+        wasted_words = words - live_words - frag_words;
+      }
+  and major_large_words = !domain_major_large_words in
+  let heap_words = major_pools.words + major_large_words in
+  Json.Gc_stats.
+    {
+      major_pools;
+      major_large_words;
+      heap_words;
+      frag_wasted_percentage =
+        100. *. float_of_int major_pools.wasted_words /. float_of_int heap_words;
+    }
+
 let print_global_allocation_stats oc =
   Printf.fprintf oc "GC allocations (in words): \n";
   let minor_words = ref 0.0 in
@@ -21,6 +44,10 @@ let print_global_allocation_stats oc =
   Printf.fprintf oc "Major heap:\t %.0f\n" !major_words;
   Printf.fprintf oc "Promoted words:\t %.0f (%.2f%%)\n" !promoted_words
     (!promoted_words /. !minor_words *. 100.0);
+  let live = live_stats () in
+  Printf.fprintf oc "Occupancy:\t %d\n" live.heap_words;
+  Printf.fprintf oc "Wasted words:\t %d (%.2f%%)\n"
+    live.major_pools.wasted_words live.frag_wasted_percentage;
   Printf.fprintf oc "\n"
 
 let print_per_domain_stats oc =
@@ -185,6 +212,7 @@ let print_percentiles json output hist outliers =
             major_heap = Some !major_words;
             promoted_words = !promoted_words;
             promoted_pct;
+            live = Some (live_stats ());
           };
         domain_alloc_stats = Some domain_alloc_stats;
         collections =
