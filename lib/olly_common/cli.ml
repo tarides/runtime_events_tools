@@ -41,14 +41,14 @@ let proc_stat_freq_option =
      RSS of the monitored process are sampled. Sampling runs on a dedicated \
      domain, independently of $(b,--freq). The value must be positive. Where \
      the resident pages of the runtime events ring buffer can be attributed to \
-     it, currently on Linux only, the peak is the maximum over samples of the \
-     RSS less the ring: only the current RSS can be decomposed that way, so a \
+     it, on Linux and OSX, the peak is the maximum over samples of the RSS \
+     less the ring: only the current RSS can be decomposed that way, so a \
      shorter interval lowers the chance of missing a transient peak at the \
      cost of more sampling overhead, a genuine accuracy/overhead tradeoff. \
-     Where they cannot, on OSX and FreeBSD and wherever the ring's mapping \
-     could not be found, Linux falls back to the exact peak the kernel \
-     maintains, which each sample can only raise, while OSX and FreeBSD report \
-     only the current RSS and the peak is again approximated from the samples."
+     Where they cannot, on FreeBSD and wherever the ring's mapping could not \
+     be found, Linux falls back to the exact peak the kernel maintains, which \
+     each sample can only raise, while OSX and FreeBSD report only the current \
+     RSS and the peak is again approximated from the samples."
   in
   Arg.(
     value
