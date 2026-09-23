@@ -6,7 +6,20 @@ let is_process_alive ~pid = olly_is_process_alive pid
 
 external pid_of_handle : handle -> int = "olly_pid_of_handle"
 
-let create_process_env = Unix.create_process_env
+(* The child inherits our own standard descriptors. Not [Unix.stdin],
+   [Unix.stdout] and [Unix.stderr], which are snapshots: on Windows they cache
+   the [HANDLE] that file descriptors 0, 1 and 2 had when the Unix module was
+   initialised, and never look it up again. Anything that redirects the
+   underlying C runtime descriptor closes that handle and leaves those values
+   dangling: alcotest captures each test's output with a C-level [dup2] over
+   descriptors 1 and 2. [create_process] then fails with [EBADF]. Going
+   through the standard channels looks the handle up afresh on every call, and
+   is the identity on Unix. *)
+let create_process_env executable args env =
+  Unix.create_process_env executable args env
+    (Unix.descr_of_in_channel Stdlib.stdin)
+    (Unix.descr_of_out_channel Stdlib.stdout)
+    (Unix.descr_of_out_channel Stdlib.stderr)
 
 let waitpid flags handle =
   match Unix.waitpid flags handle with 0, _ -> None | _, status -> Some status

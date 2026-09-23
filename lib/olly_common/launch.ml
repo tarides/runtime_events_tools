@@ -199,7 +199,6 @@ let exec_process (config : runtime_events_config) (args : string list) :
     let handle =
       try
         Platform.create_process_env executable_filename (Array.of_list args) env
-          Unix.stdin Unix.stdout Unix.stderr
       with
       | Unix.Unix_error (Unix.ENOENT, _, _) ->
           raise
