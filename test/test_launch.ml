@@ -64,7 +64,7 @@ let process_launch_slow_start () =
   let handle =
     Platform.create_process_env executable
       [| executable; string_of_float delay |]
-      env Unix.stdin Unix.stdout Unix.stderr
+      env
   in
   (* The child's own [Unix.getpid] is not the pid the runtime names the ring
      file after on Windows. The handle is. *)
