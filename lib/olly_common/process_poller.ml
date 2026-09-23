@@ -20,12 +20,12 @@ let sample_peak_rss ~pid ~ring_file ~peak_rss ~excludes_ring =
     if ring_kb < 0 then Atomic.set excludes_ring false;
     let rss_kb =
       if ring_kb > 0 then
-        (* On Linux the ring's pages are counted from the traced process's own
-           page tables, the same ones its RSS is drawn from, so there they
-           cannot exceed it. On macOS the count comes from the backing region,
-           and the ring is shared with this process, so in principle it could
-           hold resident pages the traced process never faulted in; clamp
-           rather than report a negative footprint. *)
+        (* On Linux and Windows the ring's pages are counted from the traced
+           process's own page tables, the same ones its RSS is drawn from, so
+           there they cannot exceed it. On macOS the count comes from the
+           backing region, and the ring is shared with this process, so in
+           principle it could hold resident pages the traced process never
+           faulted in; clamp rather than report a negative footprint. *)
         max 0 (rss_kb - ring_kb)
       else rss_kb
     in

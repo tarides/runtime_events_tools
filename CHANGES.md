@@ -1,6 +1,6 @@
 ### Unreleased
 * Exclude the runtime events ring buffer from the max RSS reported by
-  `gc-stats`, on Linux. (#149, @ngorogiannis)
+  `gc-stats`, on Linux, macOS and Windows. (#149, @ngorogiannis)
 * Document what `--emit-counters` emits, linking to the runtime tracing manual
   and the `Runtime_events` API reference (#123, @tmcgilchrist)
 * Report lost words, not events (#126, @ngorogiannis) 
