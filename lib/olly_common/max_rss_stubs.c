@@ -26,9 +26,8 @@
  * the RSS as it is at the sample, and the caller tracks the peak of the
  * difference.  That is forced rather than chosen — see the Linux arm.
  *
- * On FreeBSD, struct kinfo_proc has ki_rssize (RSS) and ki_size (total
- * VM) but not a heap/stack split; libprocstat would give the per-mapping
- * breakdown needed to locate the ring.
+ * Every named arm below identifies the ring; the generic one at the end
+ * of the chain cannot, and says so by reporting -1.
  */
 
 #include <caml/alloc.h>
@@ -638,25 +637,169 @@ static struct rss_sample platform_sample(int pid, const char *ring_file) {
 
 #elif defined(__FreeBSD__)
 
+#include <errno.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/user.h>
 #include <unistd.h>
 
-/* kinfo_proc carries no per-mapping breakdown; libprocstat would be
- * needed to locate the ring, so the ring is left in. */
+/* KERN_PROC_VMMAP reports the process's whole VM map, one variable-length
+ * [struct kinfo_vmentry] per map entry, each carrying the count of its
+ * resident pages.  That is what libprocstat's procstat_getvmmap wraps; we
+ * take the sysctl directly so that nothing beyond what the OCaml runtime
+ * already links has to be linked.
+ *
+ * The kernel counts those resident pages as it answers, which is what
+ * makes this arm possible and also what it costs: measured at ~4us per MB
+ * resident on 15.1, so ~2ms for a child holding a 512MB ring, and it
+ * scales with the child's whole RSS rather than with the ring alone.  At
+ * the default 10Hz that is ~2% of one core, paid with the runtime lock
+ * released; $(--proc-stat-freq) is the knob.
+ *
+ * Unless the count has been turned off, in which case every entry reads
+ * zero resident and we would subtract nothing while reporting that the
+ * ring had been excluded — the one silently wrong answer this is all
+ * meant to avoid.  So ask first, and decline to attribute if it is off. */
+static int resident_count_available(void) {
+  static int available = -1;
+  int skip = 0;
+  size_t len = sizeof(skip);
+
+  if (available < 0)
+    /* Absent on a kernel that predates the knob, which always counts. */
+    available = sysctlbyname("kern.proc_vmmap_skip_resident_count", &skip,
+                             &len, NULL, 0) != 0 ||
+                skip == 0;
+  return available;
+}
+
+/* Grown as needed and kept between samples, never freed.  A few
+ * kB for a typical process, since the kernel truncates each record's
+ * path before copying it out. */
+static char *vmmap_buf = NULL;
+static size_t vmmap_cap = 0;
+
+/* The map can grow between the call that sizes it and the call that
+ * fills it, so a filling call can still come up short. */
+#define VMMAP_ATTEMPTS 4
+
+/* [pid]'s VM map in [vmmap_buf], its length in [*len], or 0. */
+static int vmmap_fetch(int pid, size_t *len) {
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_VMMAP, pid};
+
+  for (int attempt = 0; attempt < VMMAP_ATTEMPTS; attempt++) {
+    size_t want = 0;
+
+    if (sysctl(mib, 4, NULL, &want, NULL, 0) != 0)
+      return 0;
+    /* Ask for more than the probe reported, for the reason above.  The
+     * factor is the one libprocstat uses. */
+    want = want * 4 / 3;
+    if (want > vmmap_cap) {
+      char *grown = realloc(vmmap_buf, want);
+      if (grown == NULL)
+        return 0;
+      vmmap_buf = grown;
+      vmmap_cap = want;
+    }
+    *len = vmmap_cap;
+    if (sysctl(mib, 4, vmmap_buf, len, NULL, 0) == 0)
+      return 1;
+    if (errno != ENOMEM)
+      return 0; /* the process is gone, or we may not read it */
+  }
+  return 0;
+}
+
+/* The ring's identity, as [stat] gave it. Unlike the other arms this
+ * remembers the file rather than where the mapping was found since one sysctl
+ * returns the whole map, which means we cannot ask for a specific fragment. */
+static int ring_stat_pid = 0;
+static dev_t ring_stat_dev = 0;
+static ino_t ring_stat_ino = 0;
+
+/* Resident kB of [pid]'s mappings of [ring_file], or -1 if there is no
+ * such mapping.
+ *
+ * Matching is on the inode, confirmed by either the device or the path,
+ * as on Linux: the path is gone once the file has been unlinked, 
+ * and the kernel truncates it before copyout, while the device is the 
+ * cheaper and more reliable of the two where it agrees.
+ *
+ * One mmap is one entry, but mprotect can split it, so sum over the
+ * consecutive matching ones as the macOS arm does.  [kve_resident] counts
+ * the pages resident within the entry's own range.
+ *
+ * Those pages are the backing object's, not the ones [pid] has faulted
+ * into its own page tables, so the total can exceed the part of its RSS
+ * that the ring accounts for, since olly has the file mapped, and a page
+ * either of them touches is resident in the one object.  The caller
+ * clamps. */
+static long ring_resident_kb(int pid, const char *ring_file) {
+  long page_kb = getpagesize() / 1024;
+  size_t len = 0;
+  long pages = 0;
+
+  if (ring_stat_pid != pid) {
+    struct stat st;
+
+    if (stat(ring_file, &st) != 0)
+      return -1;
+    ring_stat_dev = st.st_dev;
+    ring_stat_ino = st.st_ino;
+    ring_stat_pid = pid;
+  }
+
+  if (!vmmap_fetch(pid, &len))
+    return -1;
+
+  const char *p = vmmap_buf; 
+  const char *end = vmmap_buf + len;
+  int found = 0;
+
+  /* The kernel rounds each record's size up to a multiple of 8, so the
+   * records stay aligned and can be read where they lie. */
+  while (p < end) {
+    const struct kinfo_vmentry *kve = (const struct kinfo_vmentry *)(const void *)p;
+
+    if ((size_t)(end - p) < offsetof(struct kinfo_vmentry, kve_path) ||
+        kve->kve_structsize <= 0 ||
+        (size_t)kve->kve_structsize > (size_t)(end - p))
+      break;
+
+    if (kve->kve_type == KVME_TYPE_VNODE &&
+        (ino_t)kve->kve_vn_fileid == ring_stat_ino &&
+        ((dev_t)kve->kve_vn_fsid == ring_stat_dev ||
+        strcmp(kve->kve_path, ring_file) == 0)) {
+      found = 1;
+      pages += kve->kve_resident;
+    } else if (found)
+      break; /* past the last matching entry */
+    
+    p += kve->kve_structsize;
+  }
+  return found ? pages * page_kb : -1;
+}
+
+/* No peak to fall back on when the ring cannot be attributed, the way
+ * Linux has VmHWM and Windows PeakWorkingSetSize. So report the RSS
+ * as it is and let the caller take the peak over samples. */
 static struct rss_sample platform_sample(int pid, const char *ring_file) {
   struct rss_sample s = {0, -1};
   int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
   struct kinfo_proc kp;
   size_t len = sizeof(kp);
 
-  (void)ring_file;
+  /* Sample the ring before the RSS, for the reason the Linux arm gives. */
+  if (ring_file && resident_count_available())
+    s.ring_kb = ring_resident_kb(pid, ring_file);
   if (sysctl(mib, 4, &kp, &len, NULL, 0) == 0)
     s.rss_kb = (long)kp.ki_rssize * getpagesize() / 1024;
   return s;
 }
-
 #else
 
 static struct rss_sample platform_sample(int pid, const char *ring_file) {
@@ -694,8 +837,8 @@ CAMLprim value olly_rss_and_ring_kb(value v_pid, value v_ring_file) {
   memcpy(ring_file, String_val(v_ring_file), len);
   ring_file[len] = '\0';
 
-  /* Counting the ring's resident pages means walking its mapping, which
-   * takes up to ~1ms.  Held across that, the runtime lock would keep this
+  /* Counting the ring's resident pages means walking its mapping.  
+   * Held across that, the runtime lock would keep this
    * domain from servicing STW requests, and a minor GC on the domain
    * draining the ring would stall behind it. */
   caml_enter_blocking_section();
