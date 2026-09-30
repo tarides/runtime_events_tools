@@ -97,7 +97,7 @@ Trace subcommand help:
              dedicated domain, independently of --freq. The value must be
              positive. The peak is the maximum RSS over samples, less the
              resident pages of the runtime events ring buffer where they can be
-             attributed to it (currently on Linux, OSX and Windows only). A
+             attributed to it (currently on Linux, OSX, Windows and FreeBSD). A
              shorter interval lowers the chance of missing a transient peak, at
              the cost of more sampling overhead.
   
@@ -129,6 +129,9 @@ Trace subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> 47c56a1 ([gc-stats][freebsd] Exclude the runtime events ring from max RSS on FreeBSD)
 <<<<<<< HEAD
 =======
 >>>>>>> e83ec71 ([gc-stats][windows] Exclude the runtime events ring from max RSS on Windows)
@@ -176,10 +179,10 @@ GC stats subcommand help:
              --proc-stat-freq and is independent of --freq. The runtime events
              ring buffer is mapped into the child, and is routinely much larger
              than the program's own live memory, so its resident pages are
-             excluded from this figure where the platform permits it. Currently
-             that is Linux, macOS and Windows; elsewhere the figure still
-             includes the ring, which the human-readable output says and the
-             json output reports as max_rss_excludes_ring.
+             excluded from this figure where the platform permits it, currently
+             Linux, macOS, Windows and FreeBSD. Where the ring's mapping cannot
+             be found the figure still includes it, which the human-readable
+             output says and the json output reports as max_rss_excludes_ring.
   
   ARGUMENTS
          EXECUTABLE
@@ -220,7 +223,7 @@ GC stats subcommand help:
              dedicated domain, independently of --freq. The value must be
              positive. The peak is the maximum RSS over samples, less the
              resident pages of the runtime events ring buffer where they can be
-             attributed to it (currently on Linux, OSX and Windows only). A
+             attributed to it (currently on Linux, OSX, Windows and FreeBSD). A
              shorter interval lowers the chance of missing a transient peak, at
              the cost of more sampling overhead.
   
@@ -252,6 +255,9 @@ GC stats subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> 47c56a1 ([gc-stats][freebsd] Exclude the runtime events ring from max RSS on FreeBSD)
 <<<<<<< HEAD
 =======
 >>>>>>> e83ec71 ([gc-stats][windows] Exclude the runtime events ring from max RSS on Windows)
