@@ -39,6 +39,10 @@ let domain_times =
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
 let domain_promoted_words = Array.make number_domains 0
+let domain_pools_words = ref 0
+let domain_pools_live_words = ref 0
+let domain_pools_frag_words = ref 0
+let domain_major_large_words = ref 0
 let minor_collections = ref 0
 let major_collections = ref 0
 let forced_major_collections = ref 0
@@ -427,3 +431,17 @@ let stats_reliable () =
       wall_time.start_time wall_time.end_time;
   (not @@ Olly_common.Launch.Lost_events.were_events_lost ())
   && domain_times_reliable && wall_time.reliable
+
+let dummy = ref 0
+
+let[@inline] runtime_counter_common _ring_id counter_type value =
+  let open Runtime_events in
+  let target =
+    match counter_type with
+    | EV_C_MAJOR_HEAP_POOL_WORDS -> domain_pools_words
+    | EV_C_MAJOR_HEAP_POOL_LIVE_WORDS -> domain_pools_live_words
+    | EV_C_MAJOR_HEAP_POOL_FRAG_WORDS -> domain_pools_frag_words
+    | EV_C_MAJOR_HEAP_LARGE_WORDS -> domain_major_large_words
+    | _ -> dummy
+  in
+  target := !target + value

@@ -11,4 +11,4 @@ let runtime_counter ~domain_minor_words ~domain_promoted_words
       domain_minor_words.(ring_id) <- domain_minor_words.(ring_id) + value
   | Runtime_events.EV_C_MAJOR_ALLOCATED_WORDS ->
       domain_major_words.(ring_id) <- domain_major_words.(ring_id) + value
-  | _ -> ()
+  | _ -> Olly_gc_stats_common.runtime_counter_common ring_id counter_type value
