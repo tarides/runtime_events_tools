@@ -71,15 +71,12 @@ let runtime_events_log_wsize =
 
 let exec_args p =
   let exec_and_args, ea_docv =
-    let doc = "Executable and arguments to trace." in
+    let doc =
+      "Executable and arguments to trace. Prepend -- to protect arguments that \
+       start with a dash."
+    in
     let docv = "EXECUTABLE" in
-    Term.
-      ( (const List.concat
-        $ Arg.(
-            value
-            & pos_right (p - 1) (list ~sep:' ' string) []
-            & info [] ~docv ~doc)),
-        docv )
+    (Arg.(value & pos_right (p - 1) string [] & info [] ~docv ~doc), docv)
   in
   let attach_opt, ao_docv =
     let doc =
