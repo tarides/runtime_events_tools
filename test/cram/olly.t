@@ -49,7 +49,8 @@ Trace subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. Prepend -- to protect arguments
+             that start with a dash.
   
          TRACEFILE (required)
              Target trace file name.
@@ -171,7 +172,8 @@ GC stats subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. Prepend -- to protect arguments
+             that start with a dash.
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid
@@ -264,7 +266,8 @@ Latency subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. Prepend -- to protect arguments
+             that start with a dash.
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid
