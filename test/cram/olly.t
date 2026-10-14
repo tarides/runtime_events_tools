@@ -1,3 +1,6 @@
+Helper to hide the OCaml version olly was built with:
+  $ strip_ver() { sed 's/(here, [^)]*)/(here, VERSION)/'; }
+
 Top-level help shows all subcommands including latency:
   $ olly --help=plain
   NAME
@@ -10,13 +13,14 @@ Top-level help shows all subcommands including latency:
          gc-stats [OPTION]… [EXECUTABLE]…
              Report the GC latency profile and stats.
   
-         latency [OPTION]… [EXECUTABLE]…
-             Report the GC latency profile.
-  
          trace [OPTION]… TRACEFILE [EXECUTABLE]…
              Save the runtime trace to file.
   
          validate-gc-stats [--jsonlines] [OPTION]… [JSONFILE]…
+  
+         (Deprecated) latency [OPTION]… [EXECUTABLE]…
+             (Use the gc-stats subcommand instead.) Report the GC latency
+             profile.
   
   COMMON OPTIONS
          --help[=FMT] (default=auto)
@@ -37,7 +41,7 @@ Top-level help shows all subcommands including latency:
   
 
 Trace subcommand help:
-  $ olly trace --help=plain
+  $ olly trace --help=plain | strip_ver
   NAME
          olly-trace - Save the runtime trace to file.
   
@@ -49,7 +53,8 @@ Trace subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. NB the executable must be
+             compiled against the same OCaml version as olly (here, VERSION).
   
          TRACEFILE (required)
              Target trace file name.
@@ -128,7 +133,7 @@ Trace subcommand help:
   
 
 GC stats subcommand help:
-  $ olly gc-stats --help=plain
+  $ olly gc-stats --help=plain | strip_ver
   NAME
          olly-gc-stats - Report the GC latency profile and stats.
   
@@ -171,7 +176,8 @@ GC stats subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. NB the executable must be
+             compiled against the same OCaml version as olly (here, VERSION).
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid
@@ -251,12 +257,13 @@ GC stats subcommand help:
 
 
 Latency subcommand help:
-  $ olly latency --help=plain
+  $ olly latency --help=plain | strip_ver
   NAME
-         olly-latency - Report the GC latency profile.
+         (Deprecated) olly-latency - (Use the gc-stats subcommand instead.)
+         Report the GC latency profile.
   
   SYNOPSIS
-         olly latency [OPTION]… [EXECUTABLE]…
+         (Deprecated) olly latency [OPTION]… [EXECUTABLE]…
   
   DESCRIPTION
          Report the GC latency profile. This includes mean, standard deviation
@@ -264,7 +271,8 @@ Latency subcommand help:
   
   ARGUMENTS
          EXECUTABLE
-             Executable and arguments to trace.
+             Executable and arguments to trace. NB the executable must be
+             compiled against the same OCaml version as olly (here, VERSION).
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid

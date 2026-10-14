@@ -71,7 +71,12 @@ let runtime_events_log_wsize =
 
 let exec_args p =
   let exec_and_args, ea_docv =
-    let doc = "Executable and arguments to trace." in
+    let doc =
+      Printf.sprintf
+        "Executable and arguments to trace. NB the executable must be compiled \
+         against the same OCaml version as $(b,olly) (here, %s)."
+        Sys.ocaml_version
+    in
     let docv = "EXECUTABLE" in
     Term.
       ( (const List.concat
