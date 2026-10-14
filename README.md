@@ -122,6 +122,9 @@ If olly does not read a domain's ring buffer fast enough then some events will b
 2. Set `OCAMLRUNPARAM=e=20` to increase the size of the ring buffer.
 3. If events are being lost at startup, consider adding a brief sleep to the beginning of your program so olly has time to attach to it.
 
-## Dependencies
+## Dependencies & Building olly from source
 
 The library depends on [`hdr_histogram_ocaml`](https://github.com/ocaml-multicore/hdr_histogram_ocaml).
+
+Note that `olly` must be built against the same OCaml runtime as the monitored process.
+Otherwise, `olly` risks decoding event types differently than the process being monitored, and thus reporting erroneous results and statistics.

@@ -107,7 +107,8 @@ let latency_cmd =
     ]
   in
   let doc = "Report the GC latency profile." in
-  let info = Cmd.info "latency" ~doc ~sdocs ~man in
+  let deprecated = "(Use the gc-stats subcommand instead.)" in
+  let info = Cmd.info "latency" ~doc ~sdocs ~man ~deprecated in
 
   Cmd.v info
     Term.(
