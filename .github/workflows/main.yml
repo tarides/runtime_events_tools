@@ -61,3 +61,45 @@ jobs:
       - run: |
           opam install . --with-dev-setup --with-test --deps-only
           opam exec -- dune build @fmt
+
+  build-freebsd:
+    # No native FreeBSD runner exists on GitHub Actions, so this boots one
+    # under QEMU. FreeBSD's pkg repo only carries OCaml 4.14, so opam builds
+    # the compiler from source; cache-after-prepare snapshots the VM once
+    # that's done.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build and test on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15"
+          cache-after-prepare: true
+          prepare: |
+            # opam-hash=${{ hashFiles('*.opam') }} (invalidates the cached
+            # image above when dependency constraints change)
+            export OPAMYES=1
+            pkg install -y ocaml-opam
+            # Runs as root; the repo is synced in owned by the host runner
+            # user, so git refuses it as a dubious ownership otherwise.
+            # opam 2.6 always runs git with GIT_CONFIG_GLOBAL/SYSTEM=/dev/null
+            # for determinism (ocaml/opam#7152), so --global/--system config
+            # can't reach it; the env-var form of git config is the one
+            # channel opam doesn't sanitize away.
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0=safe.directory
+            export GIT_CONFIG_VALUE_0='*'
+            opam init --bare
+            # Pin an exact released version as opam has no OCaml 5.x FreeBSD
+            # package to fall back to.
+            opam switch create 5.5.1
+            # hdr_histogram/ctypes-foreign need cmake/pkgconf from pkg;
+            # OPAMYES alone doesn't cover opam running the system package
+            # manager, it insists on this separate, more explicit level.
+            opam install . --deps-only --with-test --confirm-level=unsafe-yes
+          run: |
+            opam exec -- dune build
+            opam exec -- dune runtest
