@@ -55,6 +55,7 @@ Trace subcommand help:
          EXECUTABLE
              Executable and arguments to trace. NB the executable must be
              compiled against the same OCaml version as olly (here, VERSION).
+             Prepend -- to protect arguments that start with a dash.
   
          TRACEFILE (required)
              Target trace file name.
@@ -131,6 +132,9 @@ Trace subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> ba5306f (Don't tokenize positional arguments)
 
 GC stats subcommand help:
   $ olly gc-stats --help=plain | strip_ver
@@ -178,6 +182,7 @@ GC stats subcommand help:
          EXECUTABLE
              Executable and arguments to trace. NB the executable must be
              compiled against the same OCaml version as olly (here, VERSION).
+             Prepend -- to protect arguments that start with a dash.
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid
@@ -247,6 +252,9 @@ GC stats subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> ba5306f (Don't tokenize positional arguments)
 
 
 
@@ -273,6 +281,7 @@ Latency subcommand help:
          EXECUTABLE
              Executable and arguments to trace. NB the executable must be
              compiled against the same OCaml version as olly (here, VERSION).
+             Prepend -- to protect arguments that start with a dash.
   
   OPTIONS
          -a [directory:]pid, --attach=[directory:]pid
@@ -325,3 +334,6 @@ Latency subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> ba5306f (Don't tokenize positional arguments)

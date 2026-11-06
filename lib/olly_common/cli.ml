@@ -74,17 +74,12 @@ let exec_args p =
     let doc =
       Printf.sprintf
         "Executable and arguments to trace. NB the executable must be compiled \
-         against the same OCaml version as $(b,olly) (here, %s)."
+         against the same OCaml version as $(b,olly) (here, %s). Prepend -- to \
+         protect arguments that start with a dash."
         Sys.ocaml_version
     in
     let docv = "EXECUTABLE" in
-    Term.
-      ( (const List.concat
-        $ Arg.(
-            value
-            & pos_right (p - 1) (list ~sep:' ' string) []
-            & info [] ~docv ~doc)),
-        docv )
+    (Arg.(value & pos_right (p - 1) string [] & info [] ~docv ~doc), docv)
   in
   let attach_opt, ao_docv =
     let doc =
