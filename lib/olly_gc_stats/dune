@@ -1,5 +1,16 @@
+(executable
+ (name discover)
+ (modules discover)
+ (libraries dune-configurator))
+
+(rule
+ (targets gc_counters_shim.suffix olly_gc_stats.suffix)
+ (action (run ./discover.exe)))
+
 (library
  (name olly_gc_stats)
+ (modules
+  (:standard \ discover))
  (optional)
  ; only needed during development by 'dune build @lint'
  ; not required for building if you haven't changed
@@ -10,36 +21,8 @@
     json)))
  (libraries olly_common hdr_histogram jsont jsont.bytesrw))
 
-(rule
- (deps olly_gc_stats.5.0.ml)
- (target olly_gc_impl.ml)
- (enabled_if
-  (< %{ocaml_version} 5.3))
- (action
-  (copy# %{deps} %{target})))
+ (rule
+   (copy# "olly_gc_stats.%{read-lines:olly_gc_stats.suffix}.ml" "olly_gc_impl.ml"))
 
-(rule
- (deps olly_gc_stats.5.3.ml)
- (target olly_gc_impl.ml)
- (enabled_if
-  (>= %{ocaml_version} 5.3))
- (action
-  (copy# %{deps} %{target})))
-
-(rule
- (deps gc_counters_shim.5.3.ml)
- (target gc_counters_shim.ml)
- (enabled_if
-  (and
-   (>= %{ocaml_version} 5.3)
-   (< %{ocaml_version} 5.5)))
- (action
-  (copy# %{deps} %{target})))
-
-(rule
- (deps gc_counters_shim.5.5.ml)
- (target gc_counters_shim.ml)
- (enabled_if
-  (>= %{ocaml_version} 5.5))
- (action
-  (copy# %{deps} %{target})))
+ (rule
+   (copy# "gc_counters_shim.%{read-lines:gc_counters_shim.suffix}.ml" "gc_counters_shim.ml"))
