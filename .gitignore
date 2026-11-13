@@ -1,2 +1,3 @@
 _build
 dune.lock/
+.vscode/
