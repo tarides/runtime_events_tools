@@ -23,7 +23,10 @@ let () =
           "usage: gen_fxt_trace (simple|long_repeat|many_names) FILE";
         exit 2
   in
-  let trace = Olly_format_fuchsia.create ~filename in
+  let trace =
+    Olly_format_fuchsia.create ~filename
+      ~max_domains:Olly_common.Launch.max_domains
+  in
   let ts = ref 9_876L in
   let tick () =
     ts := Int64.add !ts 321L;
@@ -55,7 +58,7 @@ let () =
           emit ring_id "sample_span_two" SpanBegin;
           emit ring_id "sample_span_two" SpanEnd;
           emit ring_id "sample_span_one" SpanEnd)
-        [ 0; 1; 127 ];
+        [ 0; 1; Olly_common.Launch.max_domains - 1 ];
       (* Runtime counters, around the int32 boundary. *)
       counter 0 "sample_counter_one" 0;
       counter 1 "sample_counter_one" 42;

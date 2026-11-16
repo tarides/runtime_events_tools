@@ -3,7 +3,7 @@ module type Format = sig
 
   val name : string (* name for command line argument *)
   val description : string (* description for documentation *)
-  val create : filename:string -> trace
+  val create : filename:string -> max_domains:int -> trace
   val close : trace -> unit
 
   val emit :
@@ -24,8 +24,8 @@ type trace = {
 let name (module Fmt : Format) = Fmt.name
 let description (module Fmt : Format) = Fmt.description
 
-let create (module Fmt : Format) ~filename =
-  let tracer = Fmt.create ~filename in
+let create (module Fmt : Format) ~filename ~max_domains =
+  let tracer = Fmt.create ~filename ~max_domains in
   {
     close = (fun () -> Fmt.close tracer);
     emit = Fmt.emit tracer;

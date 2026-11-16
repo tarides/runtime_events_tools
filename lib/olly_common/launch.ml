@@ -64,8 +64,29 @@ let fail msg = raise (Fail msg)
 let ring_wait_timeout = 5.0
 let ring_wait_interval = 0.005
 
+(* OCaml 5.0 to 5.2 cap the number of domains at 128.
+   From 5.3, the default is still 128, the cap can be raised
+   with OCAMLRUNPARAM=d=N, up to 4096. *)
+let max_domains = 128
+
 let ring_file_of_pid dir pid =
   Filename.concat dir (string_of_int pid ^ ".events")
+
+(* The first two fields of the ring file's metadata header, [version] and
+   [max_domains], or [None] if they cannot be read (yet). *)
+let read_ring_header ring_file =
+  let prefix_len = 16 in
+  match open_in_bin ring_file with
+  | exception Sys_error _ -> None
+  | ic ->
+      Fun.protect
+        ~finally:(fun () -> close_in_noerr ic)
+        (fun () ->
+          let buf = Bytes.create prefix_len in
+          match really_input ic buf 0 prefix_len with
+          (* The child wrote the header in this machine's native endianness. *)
+          | () -> Some (Bytes.get_int64_ne buf 0, Bytes.get_int64_ne buf 8)
+          | exception End_of_file -> None)
 
 (* The runtime creates the ring file, then resizes it to its final size, then
    fills in the metadata header (see [runtime/runtime_events.c] in the OCaml
@@ -74,19 +95,24 @@ let ring_file_of_pid dir pid =
    events at all, so wait for the header to be written. [version] and
    [max_domains] are its first two fields, both non-zero once written. *)
 let ring_header_ready ring_file =
-  let prefix_len = 16 in
-  match open_in_bin ring_file with
-  | exception Sys_error _ -> false
-  | ic ->
-      Fun.protect
-        ~finally:(fun () -> close_in_noerr ic)
-        (fun () ->
-          let buf = Bytes.create prefix_len in
-          match really_input ic buf 0 prefix_len with
-          (* The child wrote the header in this machine's native endianness. *)
-          | () ->
-              Bytes.get_int64_ne buf 0 <> 0L && Bytes.get_int64_ne buf 8 <> 0L
-          | exception End_of_file -> false)
+  match read_ring_header ring_file with
+  | Some (version, declared_max_domains) ->
+      version <> 0L && declared_max_domains <> 0L
+  | None -> false
+
+(* Fail early if the ring file announces a higher number of domains
+   than this olly can support. *)
+let check_max_domains ~ring_file (child : subprocess) =
+  match read_ring_header ring_file with
+  | Some (_, declared)
+    when Int64.compare declared (Int64.of_int max_domains) > 0 ->
+      child.close ();
+      fail
+        (Printf.sprintf
+           "the traced program has max_domains set to %Ld (see \
+            OCAMLRUNPARAM=d), but olly supports at most %d"
+           declared max_domains)
+  | Some _ | None -> child
 
 (* Wait for the child process [handle] to initialise its ring buffers and return
    a cursor on them. Raises [Fail] if the child dies first, or if it has not
@@ -263,7 +289,9 @@ let exec_process (config : runtime_events_config) (args : string list) :
           (ring_file_of_pid dir child_pid)
       else Unix.unlink (ring_file_of_pid dir child_pid)
   in
-  { alive; cursor; close; origin = Launched { reaped }; pid = child_pid }
+  check_max_domains
+    ~ring_file:(ring_file_of_pid dir child_pid)
+    { alive; cursor; close; origin = Launched { reaped }; pid = child_pid }
 
 let attach_process (dir : string) (pid : int) : subprocess =
   (* Check the target process exists before attempting to attach *)
@@ -290,7 +318,7 @@ let attach_process (dir : string) (pid : int) : subprocess =
   in
   let alive () = Platform.is_process_alive ~pid
   and close () = Runtime_events.free_cursor cursor in
-  { alive; cursor; close; origin = Attached; pid }
+  check_max_domains ~ring_file { alive; cursor; close; origin = Attached; pid }
 
 let launch_process config (exec_args : exec_config) : subprocess =
   match exec_args with

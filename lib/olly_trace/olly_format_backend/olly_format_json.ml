@@ -5,7 +5,7 @@ let description = "Chrome Trace Format"
 
 type trace = { file : out_channel; mutable first : bool }
 
-let create ~filename =
+let create ~filename ~max_domains:_ =
   let file = open_out filename in
   output_char file '[';
   { file; first = true }

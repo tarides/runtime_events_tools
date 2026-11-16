@@ -5,12 +5,12 @@ let description = "Perfetto"
 
 type trace = { writer : Fxt_write.t; doms : Fxt_write.thread array }
 
-let create ~filename =
+let create ~filename ~max_domains =
   let oc = Out_channel.open_bin filename in
   let writer = Fxt_write.create oc in
   let doms =
-    let max_doms = 128 in
-    Array.init max_doms (fun i -> Fxt_write.{ pid = 0L; tid = Int64.of_int i })
+    Array.init max_domains (fun i ->
+        Fxt_write.{ pid = 0L; tid = Int64.of_int i })
   in
   { writer; doms }
 

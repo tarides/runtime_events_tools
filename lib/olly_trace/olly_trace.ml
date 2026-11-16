@@ -3,7 +3,10 @@ module Format = Olly_format_backend
 let trace process_poller_sleep poll_sleep fmt trace_filename emit_counter
     runtime_events_dir runtime_events_log_wsize exec_args =
   let open Format.Event in
-  let tracer = Format.create fmt ~filename:trace_filename in
+  let tracer =
+    Format.create fmt ~filename:trace_filename
+      ~max_domains:Olly_common.Launch.max_domains
+  in
   let runtime_phase kind ring_id ts phase =
     Format.emit tracer
       ~name:(Runtime_events.runtime_phase_name phase)
