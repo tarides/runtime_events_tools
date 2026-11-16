@@ -41,7 +41,7 @@ let () =
   (match variant with
   | `Long_repeat ->
       for i = 0 to 59_999 do
-        let ring_id = i mod 4 in
+        let ring_id = i mod 300 in
         emit ring_id "test_span" SpanBegin;
         counter ring_id "test_counter" i;
         emit ring_id "test_span" SpanEnd

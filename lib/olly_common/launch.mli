@@ -19,7 +19,7 @@ type exec_config = Attach of string * int | Execute of string list
 exception Fail of string
 
 val max_domains : int
-(** Number of domains olly can follow. Currently 128 (OCaml's default). Tracers
+(** Number of domains olly can follow. Currently 4086 (OCaml's default). Tracers
     and backends must support this amount. Checked against events files when
     launching or attaching to a program. *)
 

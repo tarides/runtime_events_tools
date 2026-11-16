@@ -67,7 +67,7 @@ let ring_wait_interval = 0.005
 (* OCaml 5.0 to 5.2 cap the number of domains at 128.
    From 5.3, the default is still 128, the cap can be raised
    with OCAMLRUNPARAM=d=N, up to 4096. *)
-let max_domains = 128
+let max_domains = 4096
 
 let ring_file_of_pid dir pid =
   Filename.concat dir (string_of_int pid ^ ".events")
