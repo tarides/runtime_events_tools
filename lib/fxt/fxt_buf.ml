@@ -34,17 +34,61 @@ let flush t oc =
 
 let[@inline] bytes t = t.buf
 
-(* Zero-allocation C stubs for packing FXT headers directly into the
-   buffer without intermediate Int64 boxing. *)
-external put_event_header :
-  Bytes.t -> int -> int -> int -> int -> int -> int -> unit
-  = "fxt_put_event_header_bytecode" "fxt_put_event_header_native"
-[@@noalloc]
+(* Pack an FXT event header and write it directly into a Bytes.t buffer.
+   All arguments are unboxed/untagged to avoid Int64 allocation.
 
-external put_arg_header_i32 : Bytes.t -> int -> int -> int -> int -> unit
-  = "fxt_put_arg_header_i32"
-[@@noalloc]
+   Layout (64 bits):
+     bits  0-3:  record type (always 4 for events)
+     bits  4-15: size in words
+     bits 16-19: event type (0=instant, 1=counter, 2=begin, 3=end)
+     bits 20-23: number of arguments
+     bits 24-31: thread ref index (0 for inline)
+     bits 48-63: name string ref
+*)
+let[@inline] put_event_header buf pos size event_ty n_args thread_ref name_ref =
+  put_raw_64_le buf pos
+    Int64.(
+      logor 4L (* record type = event *)
+        (logor
+           (shift_left (of_int size) 4)
+           (logor
+              (shift_left (of_int event_ty) 16)
+              (logor
+                 (shift_left (of_int n_args) 20)
+                 (logor
+                    (shift_left (of_int thread_ref) 24)
+                    (shift_left (of_int name_ref) 48))))))
 
-external put_arg_header_i64 : Bytes.t -> int -> int -> int -> unit
-  = "fxt_put_arg_header_i64"
-[@@noalloc]
+(* Pack an FXT argument header for an int32 argument and write it.
+   The int32 value is packed into the upper 32 bits of the header word.
+
+   Layout (64 bits):
+     bits  0-3:  argument type (1 = int32)
+     bits  4-15: size in words
+     bits 16-31: name string ref
+     bits 32-63: int32 value
+*)
+let[@inline] put_arg_header_i32 buf pos arg_words name_ref value =
+  put_raw_64_le buf pos
+    Int64.(
+      logor 1L (* arg type = int32 *)
+        (logor
+           (shift_left (of_int arg_words) 4)
+           (logor
+              (shift_left (of_int name_ref) 16)
+              (shift_left (of_int value) 32))))
+
+(* Pack an FXT argument header for an int64 argument and write it.
+
+   Layout (64 bits):
+     bits  0-3:  argument type (3 = int64)
+     bits  4-15: size in words
+     bits 16-31: name string ref
+*)
+let[@inline] put_arg_header_i64 buf pos arg_words name_ref =
+  put_raw_64_le buf pos
+    Int64.(
+      logor 3L (* arg type = int64 *)
+        (logor
+           (shift_left (of_int arg_words) 4)
+           (shift_left (of_int name_ref) 16)))

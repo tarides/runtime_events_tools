@@ -1,6 +1,3 @@
 (library
  (name fxt)
- (wrapped false)
- (foreign_stubs
-  (language c)
-  (names fxt_stubs)))
+ (wrapped false))

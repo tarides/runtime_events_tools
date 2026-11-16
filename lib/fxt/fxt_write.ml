@@ -138,7 +138,7 @@ let close t =
 
 let[@inline] is_i32 (i : int) : bool = Int32.(to_int (of_int i) = i)
 
-(* Write an event header via C stub (zero Int64 boxing), then advance pos *)
+(* Write an event header, then advance pos *)
 let[@inline] write_event_header buf ~words ~event_ty ~n_args ~thread_ref
     ~name_ref =
   let pos = B.pos buf in
@@ -189,7 +189,6 @@ let counter t ~thread ~name ~ts ~value =
   B.put_64 t.buf ts;
   thr_ref_write t.buf thread_ref;
   str_ref_write t.buf name_ref;
-  (* Argument "v" via C stub *)
   let arg_pos = B.pos t.buf in
   let v_enc = str_ref_encode v_ref in
   if is_i32 value then begin
