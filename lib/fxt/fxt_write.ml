@@ -127,8 +127,8 @@ let create oc =
   let t = { oc; buf; strings; threads } in
   (* Magic record *)
   B.put_64 buf 0x0016547846040010L;
-  (* Initialization record: 1 tick = 1ns *)
-  B.put_64 buf 0x0000000000140010L;
+  (* Initialization record (record type 1, 2 words): 1 tick = 1ns *)
+  B.put_64 buf 0x21L;
   B.put_64 buf 1_000_000_000L;
   t
 
