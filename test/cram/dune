@@ -12,3 +12,7 @@
  (applies_to crash)
  (enabled_if
   (<> %{os_type} Win32)))
+
+(cram
+ (applies_to fuchsia)
+ (deps %{dep:../gen_fxt_trace.exe} %{dep:../dump_fxt_trace.exe}))

@@ -102,3 +102,14 @@
  (deps run_endlessly.exe run_slow_start.exe)
  (action
   (run %{test} --show-errors)))
+
+; Write a trace through the fuchsia backend, and decode it, for cram/fuchsia.t
+
+(executable
+ (name gen_fxt_trace)
+ (modules gen_fxt_trace)
+ (libraries olly_format_backend olly_format_fuchsia))
+
+(executable
+ (name dump_fxt_trace)
+ (modules dump_fxt_trace))
