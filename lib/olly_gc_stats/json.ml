@@ -126,20 +126,74 @@ module Gc_stats = struct
 
   [@@@deriving.end]
 
+  type heap_pools_stat = {
+    words : int;
+    live_words : int;
+    frag_words : int;
+    wasted_words : int;
+  }
+  [@@deriving_inline jsont]
+
+  let _ = fun (_ : heap_pools_stat) -> ()
+
+  let heap_pools_stat_jsont =
+    let make words live_words frag_words wasted_words =
+      { words; live_words; frag_words; wasted_words }
+    in
+    Jsont.Object.map ~kind:"Heap_pools_stat" make
+    |> Jsont.Object.mem "words" Jsont.int ~enc:(fun t -> t.words)
+    |> Jsont.Object.mem "live_words" Jsont.int ~enc:(fun t -> t.live_words)
+    |> Jsont.Object.mem "frag_words" Jsont.int ~enc:(fun t -> t.frag_words)
+    |> Jsont.Object.mem "wasted_words" Jsont.int ~enc:(fun t -> t.wasted_words)
+    |> Jsont.Object.finish
+
+  let _ = heap_pools_stat_jsont
+
+  [@@@deriving.end]
+
+  type heap_live_stat = {
+    major_pools : heap_pools_stat;
+    major_large_words : int;
+    heap_words : int;
+    frag_wasted_percentage : percentage;
+  }
+  [@@deriving_inline jsont]
+
+  let _ = fun (_ : heap_live_stat) -> ()
+
+  let heap_live_stat_jsont =
+    let make major_pools major_large_words heap_words frag_wasted_percentage =
+      { major_pools; major_large_words; heap_words; frag_wasted_percentage }
+    in
+    Jsont.Object.map ~kind:"Heap_live_stat" make
+    |> Jsont.Object.mem "major_pools" heap_pools_stat_jsont ~enc:(fun t ->
+        t.major_pools)
+    |> Jsont.Object.mem "major_large_words" Jsont.int ~enc:(fun t ->
+        t.major_large_words)
+    |> Jsont.Object.mem "heap_words" Jsont.int ~enc:(fun t -> t.heap_words)
+    |> Jsont.Object.mem "frag_wasted_percentage" percentage_jsont ~enc:(fun t ->
+        t.frag_wasted_percentage)
+    |> Jsont.Object.finish
+
+  let _ = heap_live_stat_jsont
+
+  [@@@deriving.end]
+
   type allocations = {
     total_heap : float0;
     minor_heap : float0;
     major_heap : float0 option; [@option]
     promoted_words : float0;
     promoted_pct : percentage;
+    live : heap_live_stat option; [@option]
   }
   [@@deriving_inline jsont]
 
   let _ = fun (_ : allocations) -> ()
 
   let allocations_jsont =
-    let make total_heap minor_heap major_heap promoted_words promoted_pct =
-      { total_heap; minor_heap; major_heap; promoted_words; promoted_pct }
+    let make total_heap minor_heap major_heap promoted_words promoted_pct live =
+      { total_heap; minor_heap; major_heap; promoted_words; promoted_pct; live }
     in
     Jsont.Object.map ~kind:"Allocations" make
     |> Jsont.Object.mem "total_heap" float0_jsont ~enc:(fun t -> t.total_heap)
@@ -152,6 +206,10 @@ module Gc_stats = struct
         t.promoted_words)
     |> Jsont.Object.mem "promoted_pct" percentage_jsont ~enc:(fun t ->
         t.promoted_pct)
+    |> Jsont.Object.mem "live"
+         (Jsont.option heap_live_stat_jsont)
+         ~enc:(fun t -> t.live)
+         ~dec_absent:None ~enc_omit:Option.is_none
     |> Jsont.Object.finish
 
   let _ = allocations_jsont

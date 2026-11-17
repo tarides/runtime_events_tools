@@ -105,6 +105,7 @@ let print_percentiles json output hist outliers =
             major_heap = None;
             promoted_words = !promoted_words;
             promoted_pct;
+            live = None;
           };
         domain_alloc_stats = None;
         collections =
