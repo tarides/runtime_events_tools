@@ -10,7 +10,7 @@ let create ~filename ~max_domains =
   let writer = Fxt_write.create oc in
   let doms =
     Array.init max_domains (fun i ->
-        Fxt_write.{ pid = 0L; tid = Int64.of_int i })
+        Fxt_write.{ pid = Int64.of_int i; tid = Int64.of_int i })
   in
   { writer; doms }
 
