@@ -260,14 +260,17 @@ let validate_outliers (t : Json.Gc_stats.t) (outliers : Json.Gc_stats.outliers)
     =
   check_range "0 <= outliers" Format.pp_print_int ~lo:0 ~hi:Int.max_int
     outliers.count
-  &&& check_range "0 <= mean_latency <= max_latency" Format.pp_print_float
-        ~lo:0. ~hi:outliers.max_latency outliers.mean_latency
-  &&& check_range "t.min_latency <= mean_latency <= t.max_latency"
-        Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
-        outliers.mean_latency
-  &&& check_range "t.min_latency <= max_latency <= t.max_latency"
-        Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
-        outliers.max_latency
+  &&&
+  if outliers.count = 0 then Ok ()
+  else
+    check_range "0 <= mean_latency <= max_latency" Format.pp_print_float ~lo:0.
+      ~hi:outliers.max_latency outliers.mean_latency
+    &&& check_range "t.min_latency <= mean_latency <= t.max_latency"
+          Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
+          outliers.mean_latency
+    &&& check_range "t.min_latency <= max_latency <= t.max_latency"
+          Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
+          outliers.max_latency
 
 let validate_domain_alloc_stat (t : Json.Gc_stats.t)
     (key, (da : Json.Gc_stats.domain_alloc_stat)) =
