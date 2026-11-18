@@ -8,8 +8,14 @@ let[@inline] clear t = t.pos <- 0
 let[@inline] pos t = t.pos
 let[@inline] available t = t.pos_end - t.pos
 
-external put_raw_64_le : Bytes.t -> int -> int64 -> unit = "%caml_bytes_set64u"
+external unsafe_put_int64 : Bytes.t -> int -> int64 -> unit
+  = "%caml_bytes_set64u"
 [@@noalloc]
+
+external bswap_int64 : int64 -> int64 = "%bswap_int64"
+
+let[@inline always] put_raw_64_le bytes ofs v =
+  unsafe_put_int64 bytes ofs (if Sys.big_endian then bswap_int64 v else v)
 
 let[@inline always] put_64 t (v : int64) =
   let pos = t.pos in
