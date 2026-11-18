@@ -18,6 +18,11 @@ type exec_config = Attach of string * int | Execute of string list
 
 exception Fail of string
 
+val max_domains : int
+(** Number of domains olly can follow. Currently 4086 (OCaml's default). Tracers
+    and backends must support this amount. Checked against events files when
+    launching or attaching to a program. *)
+
 (* Exposed for [test_launch]: the tests exercise process launching directly,
    without going through [olly]. *)
 val exec_process : runtime_events_config -> string list -> subprocess

@@ -7,12 +7,7 @@ type ts = {
   mutable reliable : bool;
 }
 
-(* Maximum number of domains that can be active concurrently.
-   Defaults to 128 on 64-bit platforms and 16 on 32-bit platforms.
-
-   This can be user configurable with OCAMLRUNPARAM=d=XXX
-*)
-let number_domains = 128
+let number_domains = Olly_common.Launch.max_domains
 
 (* Running summary of GC pauses that fall outside the histogram's range. *)
 type outliers = { mutable count : int; mutable total : int; mutable max : int }

@@ -3,64 +3,29 @@ open Olly_format_backend
 let name = "fuchsia"
 let description = "Perfetto"
 
-module Trace = Trace_fuchsia.Writer
+type trace = { writer : Fxt_write.t; doms : Fxt_write.thread array }
 
-type trace = {
-  doms : Trace.Thread_ref.t array;
-  buf : Trace_fuchsia.Buf_chain.t;
-  collector : Trace_fuchsia.Collector_fuchsia.t;
-  exporter : Trace_fuchsia.Exporter.t;
-}
-
-let flush trace =
-  Trace_fuchsia.Buf_chain.ready_all_non_empty trace.buf;
-  Trace_fuchsia.Buf_chain.pop_ready trace.buf ~f:trace.exporter.write_bufs;
-  trace.exporter.flush ()
-
-let create ~filename =
-  let buf_pool = Trace_fuchsia.Buf_pool.create () in
-  let buf = Trace_fuchsia.Buf_chain.create ~sharded:true ~buf_pool () in
+let create ~filename ~max_domains =
   let oc = Out_channel.open_bin filename in
-  let exporter = Trace_fuchsia.Exporter.of_out_channel ~close_channel:true oc in
-  let collector =
-    Trace_fuchsia.Collector_fuchsia.create ~buf_pool ~pid:0 ~exporter ()
-  in
-  (* Adds the headers to output *)
-  Trace_fuchsia.Collector_fuchsia.callbacks.init collector;
+  let writer = Fxt_write.create oc in
   let doms =
-    let max_doms = 128 in
-    Array.init max_doms (fun i ->
-        (* Slot [i + 1] of the trace's thread table, bound below. *)
-        Trace.Thread_ref.ref (i + 1))
+    Array.init max_domains (fun i ->
+        Fxt_write.{ pid = Int64.of_int i; tid = Int64.of_int i })
   in
-  (* A [Thread_ref.ref] is an index into the thread table, not a pid. It must be 
-     bound to a (pid, tid) pair by a thread record, so that consumers can tell the 
-     domains apart. *)
-  Array.iteri
-    (fun i _ -> Trace.Thread_record.encode buf ~as_ref:(i + 1) ~pid:0 ~tid:i ())
-    doms;
-  { doms; buf; collector; exporter }
+  { writer; doms }
 
-let close trace =
-  flush trace;
-  Trace_fuchsia.Collector_fuchsia.close trace.collector
+let close trace = Fxt_write.close trace.writer
 
-let emit trace evt =
+let emit_counter trace ~ring_id ~ts ~name ~value =
+  let thread = trace.doms.(ring_id) in
+  Fxt_write.counter trace.writer ~thread ~name ~ts ~value
+
+let emit trace ~ring_id ~ts ~name ~kind =
   let open Event in
-  let t_ref = trace.doms.(evt.ring_id)
-  and time_ns = evt.ts
-  and name = evt.name in
-  match evt.kind with
-  | SpanBegin | SpanEnd ->
-      let write =
-        if evt.kind = SpanBegin then Trace.Event.Duration_begin.encode
-        else Trace.Event.Duration_end.encode
-      in
-      write trace.buf ~args:[] ~t_ref ~name ~time_ns ()
-  | Counter value ->
-      Trace.Event.Counter.encode trace.buf ~t_ref ~name ~time_ns
-        ~args:[ ("v", A_int value) ]
-        ()
-  | Instant ->
-      Trace.Event.Instant.encode trace.buf ~name ~args:[] ~t_ref ~time_ns ()
+  let thread = trace.doms.(ring_id) in
+  match kind with
+  | SpanBegin -> Fxt_write.duration_begin trace.writer ~thread ~name ~ts
+  | SpanEnd -> Fxt_write.duration_end trace.writer ~thread ~name ~ts
+  | Counter value -> Fxt_write.counter trace.writer ~thread ~name ~ts ~value
+  | Instant -> Fxt_write.instant trace.writer ~thread ~name ~ts
   | _ -> ()
