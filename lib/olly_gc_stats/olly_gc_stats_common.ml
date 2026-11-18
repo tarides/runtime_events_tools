@@ -266,7 +266,8 @@ let validate_domain_stat (t : Json.Gc_stats.t)
           ds.gc_time
     &&& check_range "0 <= wall_time <= global.wall_time" pp_s ~lo:0.
           ~hi:t.wall_time ds.wall_time
-    &&& check_range "0 <= gc_overhead <= 100" pp_s ~lo:0. ~hi:100. t.gc_overhead
+    &&& check_range "0 <= gc_overhead <= 100" Format.pp_print_float ~lo:0.
+          ~hi:100. ds.gc_overhead
 
 let validate_distr_latency (t : Json.Gc_stats.t) (key, (latency : float)) =
   if key |> int_of_string_opt |> Option.is_none then
