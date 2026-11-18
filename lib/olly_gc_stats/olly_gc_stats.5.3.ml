@@ -31,7 +31,7 @@ let print_per_domain_stats oc =
 
   Array.iteri
     (fun i (domain_major_word, (domain_minor_word, domain_promoted_word)) ->
-      if domain_major_word > 0 then
+      if domain_minor_word > 0 then
         data :=
           List.append !data
             [
@@ -120,9 +120,9 @@ let print_percentiles json output hist outliers =
       |> List.of_seq
     in
     let domain_stats =
-      Seq.zip (Array.to_seq domain_elapsed_times) (Array.to_seq domain_gc_times)
-      |> Seq.filter (fun (c, _) -> c > 0.)
-      |> Seq.mapi (fun i (c, g) ->
+      ap |> Array.to_seqi
+      |> Seq.filter (fun (_, (c, _)) -> c > 0.)
+      |> Seq.map (fun (i, (c, g)) ->
           ( string_of_int i,
             Json.Gc_stats.
               {
@@ -134,14 +134,15 @@ let print_percentiles json output hist outliers =
     in
     let domain_alloc_stats =
       Seq.zip
-        (Array.to_seq domain_major_words)
+        (Array.to_seqi domain_major_words)
         (Seq.zip
            (Array.to_seq domain_minor_words)
            (Array.to_seq domain_promoted_words))
-      |> Seq.filter (fun (domain_major_word, _) -> domain_major_word > 0)
-      |> Seq.mapi
+      |> Seq.filter (fun (_, (domain_minor_word, _)) -> domain_minor_word > 0)
+      |> Seq.map
            (fun
-             i (domain_major_word, (domain_minor_word, domain_promoted_word)) ->
+             ((i, domain_major_word), (domain_minor_word, domain_promoted_word))
+           ->
              ( string_of_int i,
                Json.Gc_stats.
                  {

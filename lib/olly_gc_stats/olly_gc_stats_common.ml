@@ -36,6 +36,7 @@ let domain_times =
   Array.init number_domains (fun _ ->
       { start_time = 0.; end_time = 0.; reliable = false })
 
+let domain_cumulative_times = Array.make number_domains 0.
 let domain_gc_times = Array.make number_domains 0
 let domain_minor_words = Array.make number_domains 0
 let domain_promoted_words = Array.make number_domains 0
@@ -64,7 +65,9 @@ let elapsed t =
     in
     end_time -. start_time
 
-let domain_elapsed_times () = domain_times |> Array.map elapsed
+let domain_elapsed_times () =
+  domain_times
+  |> Array.mapi (fun i ts -> domain_cumulative_times.(i) +. elapsed ts)
 
 let max_latency hist outliers =
   float_of_int (max (H.max hist) outliers.max) |> ms
@@ -86,6 +89,24 @@ let set_end_time t ts =
   t.end_time <- ts;
   t.reliable <- t.end_time >= t.start_time
 
+let set_domain_end_time domain_id ts =
+  let t = domain_times.(domain_id) in
+  (* If EV_DOMAIN_SPAWN for this interval was missed, we use the end
+     time of the previous interval on the same ring that was kept in
+     [end_time]. *)
+  if t.start_time < Float.epsilon && t.end_time > 0. then
+    t.start_time <- t.end_time;
+  set_end_time t ts;
+  if t.reliable then begin
+    domain_cumulative_times.(domain_id) <-
+      domain_cumulative_times.(domain_id) +. elapsed t;
+    (* Reset [start_time] so [domain_elapsed_times] only adds the
+       interval of a domain that is still running but keep
+       [end_time] to bound a missing start above. *)
+    t.start_time <- 0.;
+    t.reliable <- false
+  end
+
 let lifecycle domain_id ts lifecycle_event _data =
   let ts = float_of_int Int64.(to_int @@ Ts.to_int64 ts) /. 1_000_000_000. in
   match lifecycle_event with
@@ -94,10 +115,9 @@ let lifecycle domain_id ts lifecycle_event _data =
       domain_times.(domain_id).start_time <- ts
   | Runtime_events.EV_RING_STOP ->
       set_end_time wall_time ts;
-      set_end_time domain_times.(domain_id) ts
+      set_domain_end_time domain_id ts
   | Runtime_events.EV_DOMAIN_SPAWN -> domain_times.(domain_id).start_time <- ts
-  | Runtime_events.EV_DOMAIN_TERMINATE ->
-      set_end_time domain_times.(domain_id) ts
+  | Runtime_events.EV_DOMAIN_TERMINATE -> set_domain_end_time domain_id ts
   | _ -> ()
 
 let print_table oc (data : string list list) =
@@ -246,7 +266,8 @@ let validate_domain_stat (t : Json.Gc_stats.t)
           ds.gc_time
     &&& check_range "0 <= wall_time <= global.wall_time" pp_s ~lo:0.
           ~hi:t.wall_time ds.wall_time
-    &&& check_range "0 <= gc_overhead <= 100" pp_s ~lo:0. ~hi:100. t.gc_overhead
+    &&& check_range "0 <= gc_overhead <= 100" Format.pp_print_float ~lo:0.
+          ~hi:100. ds.gc_overhead
 
 let validate_distr_latency (t : Json.Gc_stats.t) (key, (latency : float)) =
   if key |> int_of_string_opt |> Option.is_none then
@@ -260,14 +281,17 @@ let validate_outliers (t : Json.Gc_stats.t) (outliers : Json.Gc_stats.outliers)
     =
   check_range "0 <= outliers" Format.pp_print_int ~lo:0 ~hi:Int.max_int
     outliers.count
-  &&& check_range "0 <= mean_latency <= max_latency" Format.pp_print_float
-        ~lo:0. ~hi:outliers.max_latency outliers.mean_latency
-  &&& check_range "t.min_latency <= mean_latency <= t.max_latency"
-        Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
-        outliers.mean_latency
-  &&& check_range "t.min_latency <= max_latency <= t.max_latency"
-        Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
-        outliers.max_latency
+  &&&
+  if outliers.count = 0 then Ok ()
+  else
+    check_range "0 <= mean_latency <= max_latency" Format.pp_print_float ~lo:0.
+      ~hi:outliers.max_latency outliers.mean_latency
+    &&& check_range "t.min_latency <= mean_latency <= t.max_latency"
+          Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
+          outliers.mean_latency
+    &&& check_range "t.min_latency <= max_latency <= t.max_latency"
+          Format.pp_print_float ~lo:t.min_latency ~hi:t.max_latency
+          outliers.max_latency
 
 let validate_domain_alloc_stat (t : Json.Gc_stats.t)
     (key, (da : Json.Gc_stats.domain_alloc_stat)) =

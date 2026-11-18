@@ -66,9 +66,9 @@ let print_percentiles json output hist outliers =
       |> List.of_seq
     in
     let domain_stats =
-      Seq.zip (Array.to_seq domain_elapsed_times) (Array.to_seq domain_gc_times)
-      |> Seq.filter (fun (c, _) -> c > 0.)
-      |> Seq.mapi (fun i (c, g) ->
+      ap |> Array.to_seqi
+      |> Seq.filter (fun (_, (c, _)) -> c > 0.)
+      |> Seq.map (fun (i, (c, g)) ->
           ( string_of_int i,
             Json.Gc_stats.
               {
