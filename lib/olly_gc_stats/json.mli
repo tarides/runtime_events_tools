@@ -71,6 +71,7 @@ module Gc_stats : sig
     gc_time : s;
     gc_overhead : percentage;
     max_rss_kb : int;
+    high_watermark_rss_kb : int;
     domain_stats : domain_stat assoc_map;
     mean_latency : ms;
     stddev_latency : ms;
