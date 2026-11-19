@@ -166,6 +166,7 @@ let print_percentiles json output hist outliers =
         gc_time = total_gc_time;
         gc_overhead;
         max_rss_kb = Olly_common.Process_poller.peak_rss ();
+        high_watermark_rss_kb = Olly_common.Process_poller.high_watermark_rss ();
         domain_stats;
         mean_latency;
         stddev_latency;
@@ -211,6 +212,8 @@ let print_percentiles json output hist outliers =
       (Olly_common.Process_poller.peak_rss ())
       (if Olly_common.Process_poller.peak_rss_excludes_ring () then ""
        else "\t(includes the runtime events ring buffer)");
+    Printf.fprintf oc "High watermark RSS (kB):\t%d\n"
+      (Olly_common.Process_poller.high_watermark_rss ());
     Printf.fprintf oc "\n";
     Printf.fprintf oc "Per domain stats:\n";
     let data = ref [ [ "Domain"; "Wall"; "GC(s)"; "GC(%)" ] ] in

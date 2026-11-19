@@ -29,6 +29,10 @@ val is_alive : unit -> bool
 val peak_rss : unit -> int
 (** returns the peak RSS observed so far, in kB.*)
 
+val high_watermark_rss : unit -> int
+(** returns the OS-maintained high watermark for RSS observed so far, in kB.
+    returns -1 where unsupported. NB on FreeBSD this is a sampled value. *)
+
 val peak_rss_excludes_ring : unit -> bool
 (** whether every RSS sample taken so far had the resident pages of the runtime
     events ring buffer excluded from it. False means [peak_rss] includes the
