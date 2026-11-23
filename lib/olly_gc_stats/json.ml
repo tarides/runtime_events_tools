@@ -218,6 +218,7 @@ module Gc_stats = struct
     gc_time : s;
     gc_overhead : percentage;
     max_rss_kb : int;
+    high_watermark_rss_kb : int;
     domain_stats : domain_stat assoc_map;
     mean_latency : ms;
     stddev_latency : ms;
@@ -230,6 +231,7 @@ module Gc_stats = struct
     collections : collections;
     event_words_lost : int; [@default 0] [@omit ( = ) 0]
     stats_reliable : bool; [@default false]
+    max_rss_excludes_ring : bool;
   }
   [@@deriving_inline jsont]
 
@@ -237,9 +239,10 @@ module Gc_stats = struct
 
   let jsont =
     let make version wall_time cpu_time gc_time gc_overhead max_rss_kb
-        domain_stats mean_latency stddev_latency min_latency max_latency
-        distr_latency outliers allocations domain_alloc_stats collections
-        event_words_lost stats_reliable =
+        high_watermark_rss_kb domain_stats mean_latency stddev_latency
+        min_latency max_latency distr_latency outliers allocations
+        domain_alloc_stats collections event_words_lost stats_reliable
+        max_rss_excludes_ring =
       {
         version;
         wall_time;
@@ -247,6 +250,7 @@ module Gc_stats = struct
         gc_time;
         gc_overhead;
         max_rss_kb;
+        high_watermark_rss_kb;
         domain_stats;
         mean_latency;
         stddev_latency;
@@ -259,6 +263,7 @@ module Gc_stats = struct
         collections;
         event_words_lost;
         stats_reliable;
+        max_rss_excludes_ring;
       }
     in
     Jsont.Object.map ~kind:"T" make
@@ -268,6 +273,8 @@ module Gc_stats = struct
     |> Jsont.Object.mem "gc_time" s_jsont ~enc:(fun t -> t.gc_time)
     |> Jsont.Object.mem "gc_overhead" percentage_jsont ~enc:(fun t ->
         t.gc_overhead)
+    |> Jsont.Object.mem "high_watermark_rss_kb" Jsont.int ~enc:(fun t ->
+        t.high_watermark_rss_kb)
     |> Jsont.Object.mem "max_rss_kb" Jsont.int ~enc:(fun t -> t.max_rss_kb)
     |> Jsont.Object.mem "domain_stats" (assoc_map_jsont domain_stat_jsont)
          ~enc:(fun t -> t.domain_stats)
@@ -293,6 +300,8 @@ module Gc_stats = struct
     |> Jsont.Object.mem "stats_reliable" Jsont.bool
          ~enc:(fun t -> t.stats_reliable)
          ~dec_absent:false
+    |> Jsont.Object.mem "max_rss_excludes_ring" Jsont.bool ~enc:(fun t ->
+        t.max_rss_excludes_ring)
     |> Jsont.Object.finish
 
   let _ = jsont

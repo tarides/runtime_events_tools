@@ -32,21 +32,22 @@ let freq_option =
   in
   Arg.(
     value
-    & opt float 0.1 (* Poll at 10Hz by default. *)
+    & opt float 0.01 (* Poll at 100Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
 
 let proc_stat_freq_option =
   let doc =
     "Set the interval, in seconds, at which the process status and the peak \
      RSS of the monitored process are sampled. Sampling runs on a dedicated \
-     domain, independently of $(b,--freq). The value must be positive. On \
-     Linux, the kernel reports the peak RSS directly, so the tracked value is \
-     monotonic and each sample can only raise it; reducing the interval \
-     improves accuracy only for the final iteration (between the peak and \
-     process exit). On OSX and FreeBSD, the kernel reports only the current \
-     RSS, so the peak is approximated as the maximum over samples; a shorter \
-     interval lowers the chance of missing a transient peak at the cost of \
-     more sampling overhead, a genuine accuracy/overhead tradeoff."
+     domain, independently of $(b,--freq). The value must be positive. Where \
+     the resident pages of the runtime events ring buffer can be attributed to \
+     it, the peak is the maximum over samples of the RSS less the ring: only \
+     the current RSS can be decomposed that way, so a shorter interval lowers \
+     the chance of missing a transient peak at the cost of more sampling \
+     overhead, a genuine accuracy/overhead tradeoff. Wherever the ring's \
+     mapping could not be found, Linux and Windows fall back to the exact peak \
+     the kernel maintains, while OSX and FreeBSD report only the current RSS \
+     and the peak is again approximated from the samples."
   in
   Arg.(
     value

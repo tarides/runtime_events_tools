@@ -82,7 +82,7 @@ Trace subcommand help:
              Format of the target trace, options are: "fuchsia" (Perfetto),
              "json" (Chrome Trace Format).
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.
@@ -95,14 +95,15 @@ Trace subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. Where the resident pages of the runtime events ring
+             buffer can be attributed to it, the peak is the maximum over
+             samples of the RSS less the ring: only the current RSS can be
+             decomposed that way, so a shorter interval lowers the chance of
+             missing a transient peak at the cost of more sampling overhead, a
+             genuine accuracy/overhead tradeoff. Wherever the ring's mapping
+             could not be found, Linux and Windows fall back to the exact peak
+             the kernel maintains, while OSX and FreeBSD report only the
+             current RSS and the peak is again approximated from the samples.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -176,7 +177,13 @@ GC stats subcommand help:
          Max RSS
              Peak resident set size (in kB) of the child process, sampled
              during execution. The sampling interval is controlled by
-             --proc-stat-freq and is independent of --freq.
+             --proc-stat-freq and is independent of --freq. The runtime events
+             ring buffer is mapped into the child, and is routinely much larger
+             than the program's own live memory, so its resident pages are
+             excluded from this figure where the platform permits it, currently
+             Linux, macOS, Windows and FreeBSD. Where the ring's mapping cannot
+             be found the figure still includes it, which the human-readable
+             output says and the json output reports as max_rss_excludes_ring.
   
   ARGUMENTS
          EXECUTABLE
@@ -195,7 +202,7 @@ GC stats subcommand help:
              event tracing system’s ring buffers will be located. If not
              specified a temporary directory will be used.
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.
@@ -215,14 +222,15 @@ GC stats subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. Where the resident pages of the runtime events ring
+             buffer can be attributed to it, the peak is the maximum over
+             samples of the RSS less the ring: only the current RSS can be
+             decomposed that way, so a shorter interval lowers the chance of
+             missing a transient peak at the cost of more sampling overhead, a
+             genuine accuracy/overhead tradeoff. Wherever the ring's mapping
+             could not be found, Linux and Windows fall back to the exact peak
+             the kernel maintains, while OSX and FreeBSD report only the
+             current RSS and the peak is again approximated from the samples.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -294,7 +302,7 @@ Latency subcommand help:
              event tracing system’s ring buffers will be located. If not
              specified a temporary directory will be used.
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.
