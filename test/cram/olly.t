@@ -82,7 +82,7 @@ Trace subcommand help:
              Format of the target trace, options are: "fuchsia" (Perfetto),
              "json" (Chrome Trace Format).
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.
@@ -202,7 +202,7 @@ GC stats subcommand help:
              event tracing system’s ring buffers will be located. If not
              specified a temporary directory will be used.
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.
@@ -302,7 +302,7 @@ Latency subcommand help:
              event tracing system’s ring buffers will be located. If not
              specified a temporary directory will be used.
   
-         --freq=freq (absent=0.1)
+         --freq=freq (absent=0.01)
              Set the interval that olly sleeps in seconds, after performing a
              [Runtime_events.read_poll]. Fractions of seconds are supported. A
              value of 0.0 will skip sleeping altogether.

@@ -32,7 +32,7 @@ let freq_option =
   in
   Arg.(
     value
-    & opt float 0.1 (* Poll at 10Hz by default. *)
+    & opt float 0.01 (* Poll at 100Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
 
 let proc_stat_freq_option =
