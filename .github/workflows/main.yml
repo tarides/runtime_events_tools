@@ -10,7 +10,18 @@ on:
     - cron: 0 1 * * MON
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Reject leftover conflict markers
+        run: if git grep -nE '^(<<<<<<<|>>>>>>>)( |$)' ; then exit 1; fi
+
   build:
+    needs: check
 
     strategy:
       fail-fast: false
