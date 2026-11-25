@@ -61,3 +61,4 @@ jobs:
       - run: |
           opam install . --with-dev-setup --with-test --deps-only
           opam exec -- dune build @fmt
+          opam exec -- dune build @lint
