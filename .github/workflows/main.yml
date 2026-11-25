@@ -10,18 +10,29 @@ on:
     - cron: 0 1 * * MON
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Reject leftover conflict markers
+        run: if git grep -nE '^(<<<<<<<|>>>>>>>)( |$)' ; then exit 1; fi
+
   build:
+    needs: check
 
     strategy:
       fail-fast: false
       matrix:
         ocaml-compiler:
-          - 5.0
-          - 5.1
-          - 5.2
-          - 5.3
-          - 5.4
-          - 5.5
+          - "5.0"
+          - "5.1"
+          - "5.2"
+          - "5.3"
+          - "5.4"
+          - "5.5"
         os:
           - ubuntu-latest
           - macos-15
@@ -33,11 +44,11 @@ jobs:
           # string, and so looked for a garbled file name. Fixed by
           # ocaml/ocaml#13089.
           - os: windows-latest
-            ocaml-compiler: 5.0
+            ocaml-compiler: "5.0"
           - os: windows-latest
-            ocaml-compiler: 5.1
+            ocaml-compiler: "5.1"
           - os: windows-latest
-            ocaml-compiler: 5.2
+            ocaml-compiler: "5.2"
 
     runs-on: ${{ matrix.os }}
 
@@ -58,6 +69,9 @@ jobs:
 
       - run: opam exec -- dune runtest
 
-      - run: |
+      - name: Check formatting and preprocessing
+        if: matrix.os == 'ubuntu-latest' && matrix.ocaml-compiler == '5.5'
+        run: |
           opam install . --with-dev-setup --with-test --deps-only
           opam exec -- dune build @fmt
+          opam exec -- dune build @lint
