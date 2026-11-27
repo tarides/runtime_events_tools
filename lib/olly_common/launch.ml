@@ -46,26 +46,19 @@ let exit_status t =
   | Launched { reaped } -> Atomic.get reaped
   | Attached -> None
 
-type runtime_events_config = { log_wsize : int option; dir : string option }
+type runtime_events_config = {
+  log_wsize : int option;
+  dir : string option;
+  ring_wait_timeout : float;
+  ring_wait_interval : float;
+}
+
 type exec_config = Attach of string * int | Execute of string list
 
 (* Raised by exec_process to indicate various unrecoverable failures. *)
 exception Fail of string
 
 let fail msg = raise (Fail msg)
-
-(* How long to wait for a freshly launched child to initialise its ring
-   buffers, and how often to check in the meantime.
-
-   The child only creates its [<pid>.events] file while initialising the
-   runtime, so the file does not exist yet just after the fork. How long it
-   takes to appear depends on how quickly the child starts up: on macOS the
-   first execution of a freshly built binary spends a few hundred
-   milliseconds in the kernel (code signature validation) before any OCaml
-   code runs. A fixed wait is therefore either flaky or needlessly slow, so
-   we poll instead. *)
-let ring_wait_timeout = 5.0
-let ring_wait_interval = 0.005
 
 let ring_file_of_pid dir pid =
   Filename.concat dir (string_of_int pid ^ ".events")
@@ -94,7 +87,8 @@ let ring_header_ready ring_file =
 (* Wait for the child process [handle] to initialise its ring buffers and return
    a cursor on them. Raises [Fail] if the child dies first, or if it has not
    initialised them within [ring_wait_timeout]. *)
-let create_cursor_when_ready ~dir ~pid ~(handle : Platform.handle) ~executable =
+let create_cursor_when_ready ~ring_wait_timeout ~ring_wait_interval ~dir ~pid
+    ~(handle : Platform.handle) ~executable =
   let ring_file = ring_file_of_pid dir pid in
   let deadline = Unix.gettimeofday () +. ring_wait_timeout in
   let child_exited () =
@@ -223,8 +217,9 @@ let exec_process (config : runtime_events_config) (args : string list) :
     (pid, handle)
   in
   let cursor =
-    create_cursor_when_ready ~dir ~pid:child_pid ~handle:child_handle
-      ~executable:executable_filename
+    create_cursor_when_ready ~ring_wait_timeout:config.ring_wait_timeout
+      ~ring_wait_interval:config.ring_wait_interval ~dir ~pid:child_pid
+      ~handle:child_handle ~executable:executable_filename
   in
   (* used to avoid double reaping, which raises an exception other than ECHILD on windows *)
   let reaped = Atomic.make None in
@@ -362,25 +357,9 @@ type consumer_config = {
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
+  ring_wait_timeout : float;
+  ring_wait_interval : float;
 }
-
-let empty_config =
-  {
-    runtime_begin = (fun _ _ _ -> ());
-    runtime_end = (fun _ _ _ -> ());
-    runtime_counter = (fun _ _ _ _ -> ());
-    lifecycle = (fun _ _ _ _ -> ());
-    extra = Fun.id;
-    cleanup = (fun () -> ());
-    on_success = (fun _ -> ());
-    process_poller_sleep = 0.1;
-    sample_rss = true;
-    poll_sleep = 0.1 (* Poll at 10Hz *);
-    runtime_events_dir = None;
-    (* Use default tmp directory *)
-    runtime_events_log_wsize = None;
-    (* Use default size 16. *)
-  }
 
 let olly config exec_args =
   Fun.protect ~finally:Lost_events.display (fun () ->
@@ -388,6 +367,8 @@ let olly config exec_args =
         {
           dir = config.runtime_events_dir;
           log_wsize = config.runtime_events_log_wsize;
+          ring_wait_timeout = config.ring_wait_timeout;
+          ring_wait_interval = config.ring_wait_interval;
         }
       in
       let child = launch_process runtime_config exec_args in

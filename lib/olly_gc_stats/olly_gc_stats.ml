@@ -63,12 +63,21 @@ let gc_stats_cmd =
   let doc = "Report the GC latency profile and stats." in
   let info = Cmd.info "gc-stats" ~doc ~sdocs ~man in
 
-  Cmd.v info
-    Term.(
-      ret
-        (const Olly_gc_impl.gc_stats
-        $ proc_stat_freq_option $ freq_option $ json_option $ output_option
-        $ runtime_events_dir $ runtime_events_log_wsize $ exec_args 0))
+  let open Term.Syntax in
+  Cmd.v info @@ Term.ret
+  @@
+  let+ ring_wait_timeout = ring_wait_timeout_option
+  and+ ring_wait_interval = ring_wait_interval_option
+  and+ process_poller_sleep = proc_stat_freq_option
+  and+ poll_sleep = freq_option
+  and+ json = json_option
+  and+ output = output_option
+  and+ runtime_events_dir = runtime_events_dir
+  and+ runtime_events_log_wsize = runtime_events_log_wsize
+  and+ exec_args = exec_args 0 in
+  Olly_gc_impl.gc_stats ~ring_wait_timeout ~ring_wait_interval
+    ~process_poller_sleep ~poll_sleep ~json ~output ~runtime_events_dir
+    ~runtime_events_log_wsize exec_args
 
 let validate_gc_stats_cmd =
   let open Cmdliner in

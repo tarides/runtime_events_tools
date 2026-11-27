@@ -260,8 +260,9 @@ let print_percentiles json output hist outliers =
     Printf.fprintf oc "Compactions: %i\n" !compactions;
     Printf.fprintf oc "Stats reliable: %b\n" (stats_reliable ()))
 
-let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
-    runtime_events_log_wsize exec_args =
+let gc_stats ~ring_wait_timeout ~ring_wait_interval ~process_poller_sleep
+    ~poll_sleep ~json ~output ~runtime_events_dir ~runtime_events_log_wsize
+    exec_args =
   let current_event = Hashtbl.create 13 in
   let hist = make_hist () in
   let outliers = make_outliers () in
@@ -312,7 +313,6 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
     `Ok
       (olly
          {
-           empty_config with
            runtime_begin;
            runtime_end;
            runtime_counter;
@@ -322,6 +322,11 @@ let gc_stats process_poller_sleep poll_sleep json output runtime_events_dir
            poll_sleep;
            runtime_events_dir;
            runtime_events_log_wsize;
+           ring_wait_timeout;
+           ring_wait_interval;
+           extra = Fun.id;
+           cleanup = (fun () -> ());
+           sample_rss = true;
          }
          exec_args)
   with Fail msg -> `Error (false, msg)

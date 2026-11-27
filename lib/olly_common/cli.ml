@@ -1,11 +1,11 @@
 open Cmdliner
 
-let positive_float =
+let positive_or_zero_float =
   let parse s =
     let f = Arg.Conv.parser Arg.float s in
     Result.bind f (fun f ->
-        if f > 0.0 then Ok f
-        else Error (Printf.sprintf "%g is not a positive value" f))
+        if f >= 0. then Ok f
+        else Error (Printf.sprintf "%g is not a positive or zero value" f))
   in
   Arg.Conv.of_conv ~parser:parse Arg.float
 
@@ -32,8 +32,33 @@ let freq_option =
   in
   Arg.(
     value
-    & opt float 0.1 (* Poll at 10Hz by default. *)
+    & opt positive_or_zero_float 0.1 (* Poll at 10Hz by default. *)
     & info [ "freq" ] ~docv:"freq" ~doc)
+
+let ring_wait_timeout_option =
+  let doc =
+    "Set the total time, in seconds, that olly waits for the ring file to \
+     appear, before failing (on some OSs like macOS, the first exxecution of a \
+     binary can be slow). Fractions of seconds are supported. This value must \
+     be greater or equal to the value of $(b,--ring-wait-interval). Defaults \
+     to 5s."
+  in
+  Arg.(
+    value
+    & opt positive_or_zero_float 5. (* 5s by default. *)
+    & info [ "ring-wait-timeout" ] ~docv:"ring-wait-timeout" ~doc)
+
+let ring_wait_interval_option =
+  let doc =
+    "Set the slice interval that olly sleeps in seconds, while waiting for the \
+     ring file to appear. Fractions of seconds are supported. A value of 0.0 \
+     will skip sleeping altogether. This value must be less or equal to that \
+     of $(b,--ring-wait-timeout). Defaults to 5ms."
+  in
+  Arg.(
+    value
+    & opt positive_or_zero_float 0.005 (* 5ms by default. *)
+    & info [ "ring-wait-interval" ] ~docv:"ring-wait-interval" ~doc)
 
 let proc_stat_freq_option =
   let doc =
@@ -47,14 +72,14 @@ let proc_stat_freq_option =
   in
   Arg.(
     value
-    & opt positive_float 0.1 (* Sample at 10Hz by default. *)
+    & opt positive_or_zero_float 0.1 (* Sample at 10Hz by default. *)
     & info [ "proc-stat-freq" ] ~docv:"proc-stat-freq" ~doc)
 
 let runtime_events_dir =
   let doc =
     "Sets the directory where the .events files containing the runtime event \
-     tracing system’s ring buffers will be located.\n\n\
-    \               If not specified a temporary directory will be used."
+     tracing system’s ring buffers will be located. If not specified a \
+     temporary directory will be used."
   in
   Arg.(value & opt (some string) None & info [ "d"; "dir" ] ~docv:"dir" ~doc)
 

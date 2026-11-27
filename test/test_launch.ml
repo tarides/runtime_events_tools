@@ -1,7 +1,14 @@
+let config =
+  {
+    Olly_common.Launch.log_wsize = None;
+    dir = None;
+    ring_wait_interval = 0.005;
+    ring_wait_timeout = 5.;
+  }
+
 let process_launch_failure () =
   let open Olly_common in
   let open Alcotest in
-  let config = { Launch.log_wsize = None; dir = None } in
   match_raises "executable not found on path should not launch"
     (* Executable not found on path *)
     (function Launch.Fail _ -> true | _exn -> false)
@@ -21,7 +28,6 @@ let process_launch_failure () =
 
 let process_launch () =
   let open Olly_common in
-  let config = { Launch.log_wsize = None; dir = None } in
   Alcotest.(check bool)
     "process should launch" true
     (try
@@ -71,7 +77,10 @@ let process_launch_slow_start () =
   let pid = Platform.pid_of_handle handle in
   let ring_file = Filename.concat dir (string_of_int pid ^ ".events") in
   let remove_ring () = try Sys.remove ring_file with Sys_error _ -> () in
-  match Launch.create_cursor_when_ready ~dir ~pid ~handle ~executable with
+  match
+    Launch.create_cursor_when_ready ~ring_wait_timeout:5.
+      ~ring_wait_interval:0.005 ~dir ~pid ~handle ~executable
+  with
   | cursor ->
       Fun.protect
         ~finally:(fun () ->

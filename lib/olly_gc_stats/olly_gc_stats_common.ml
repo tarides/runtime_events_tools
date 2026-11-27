@@ -200,13 +200,20 @@ let latency poll_sleep json output runtime_events_dir exec_args =
     `Ok
       (olly
          {
-           empty_config with
            runtime_begin;
            runtime_end;
            on_success;
            sample_rss = false;
            poll_sleep;
            runtime_events_dir;
+           runtime_counter = (fun _ _ _ _ -> ());
+           lifecycle = (fun _ _ _ _ -> ());
+           extra = Fun.id;
+           cleanup = (fun () -> ());
+           process_poller_sleep = poll_sleep;
+           runtime_events_log_wsize = None;
+           ring_wait_timeout = 5.;
+           ring_wait_interval = 0.005;
          }
          exec_args)
   with Fail msg -> `Error (false, msg)
