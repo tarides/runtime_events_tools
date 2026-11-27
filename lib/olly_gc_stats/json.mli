@@ -83,6 +83,7 @@ module Gc_stats : sig
     collections : collections;
     event_words_lost : int;
     stats_reliable : bool;
+    max_rss_excludes_ring : bool;
   }
   (** Garbage collector statistics *)
 

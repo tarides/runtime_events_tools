@@ -95,14 +95,11 @@ Trace subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. The peak is the maximum RSS over samples, less the
+             resident pages of the runtime events ring buffer where they can be
+             attributed to it (currently on Linux only). A shorter interval
+             lowers the chance of missing a transient peak, at the cost of more
+             sampling overhead.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -132,9 +129,6 @@ Trace subcommand help:
   SEE ALSO
          olly(1)
   
-<<<<<<< HEAD
-=======
->>>>>>> ba5306f (Don't tokenize positional arguments)
 
 GC stats subcommand help:
   $ olly gc-stats --help=plain | strip_ver
@@ -176,7 +170,13 @@ GC stats subcommand help:
          Max RSS
              Peak resident set size (in kB) of the child process, sampled
              during execution. The sampling interval is controlled by
-             --proc-stat-freq and is independent of --freq.
+             --proc-stat-freq and is independent of --freq. The runtime events
+             ring buffer is mapped into the child, and is routinely much larger
+             than the program's own live memory, so its resident pages are
+             excluded from this figure where the platform permits it. Currently
+             that is Linux only; elsewhere the figure still includes the ring,
+             which the human-readable output says and the json output reports
+             as max_rss_excludes_ring.
   
   ARGUMENTS
          EXECUTABLE
@@ -215,14 +215,11 @@ GC stats subcommand help:
              Set the interval, in seconds, at which the process status and the
              peak RSS of the monitored process are sampled. Sampling runs on a
              dedicated domain, independently of --freq. The value must be
-             positive. On Linux, the kernel reports the peak RSS directly, so
-             the tracked value is monotonic and each sample can only raise it;
-             reducing the interval improves accuracy only for the final
-             iteration (between the peak and process exit). On OSX and FreeBSD,
-             the kernel reports only the current RSS, so the peak is
-             approximated as the maximum over samples; a shorter interval
-             lowers the chance of missing a transient peak at the cost of more
-             sampling overhead, a genuine accuracy/overhead tradeoff.
+             positive. The peak is the maximum RSS over samples, less the
+             resident pages of the runtime events ring buffer where they can be
+             attributed to it (currently on Linux only). A shorter interval
+             lowers the chance of missing a transient peak, at the cost of more
+             sampling overhead.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -252,18 +249,6 @@ GC stats subcommand help:
   SEE ALSO
          olly(1)
   
-<<<<<<< HEAD
-=======
->>>>>>> ba5306f (Don't tokenize positional arguments)
-
-
-
-
-
-
-
-
-
 Latency subcommand help:
   $ olly latency --help=plain | strip_ver
   NAME
@@ -334,6 +319,3 @@ Latency subcommand help:
   SEE ALSO
          olly(1)
   
-<<<<<<< HEAD
-=======
->>>>>>> ba5306f (Don't tokenize positional arguments)

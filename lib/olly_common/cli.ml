@@ -39,14 +39,11 @@ let proc_stat_freq_option =
   let doc =
     "Set the interval, in seconds, at which the process status and the peak \
      RSS of the monitored process are sampled. Sampling runs on a dedicated \
-     domain, independently of $(b,--freq). The value must be positive. On \
-     Linux, the kernel reports the peak RSS directly, so the tracked value is \
-     monotonic and each sample can only raise it; reducing the interval \
-     improves accuracy only for the final iteration (between the peak and \
-     process exit). On OSX and FreeBSD, the kernel reports only the current \
-     RSS, so the peak is approximated as the maximum over samples; a shorter \
-     interval lowers the chance of missing a transient peak at the cost of \
-     more sampling overhead, a genuine accuracy/overhead tradeoff."
+     domain, independently of $(b,--freq). The value must be positive. The \
+     peak is the maximum RSS over samples, less the resident pages of the \
+     runtime events ring buffer where they can be attributed to it (currently \
+     on Linux only). A shorter interval lowers the chance of missing a \
+     transient peak, at the cost of more sampling overhead."
   in
   Arg.(
     value
