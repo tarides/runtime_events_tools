@@ -10,8 +10,8 @@ count, so 20 is about as far as this can go: 21 already asks for ~2GB and the
 child fails to create it. (OCAMLRUNPARAM's d=, which would cap the domain
 count, does not exist before OCaml 5.5.)
 
-  $ olly gc-stats --json --freq=0 -o small.json ../run_alloc.exe 2> small.err || cat small.err
-  $ olly gc-stats --json --freq=0 --log-wsize=20 -o large.json ../run_alloc.exe 2> large.err || cat large.err
+  $ olly gc-stats --json --freq=0 --ring-wait-interval=0 -o small.json ../run_alloc.exe 2> small.err || cat small.err
+  $ olly gc-stats --json --freq=0 --ring-wait-interval=0 --log-wsize=20 -o large.json ../run_alloc.exe 2> large.err || cat large.err
 
   $ small=$(sed -n 's/.*"max_rss_kb": *\([0-9]*\).*/\1/p' small.json)
   $ large=$(sed -n 's/.*"max_rss_kb": *\([0-9]*\).*/\1/p' large.json)

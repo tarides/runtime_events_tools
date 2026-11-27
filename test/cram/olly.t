@@ -101,6 +101,19 @@ Trace subcommand help:
              shorter interval lowers the chance of missing a transient peak, at
              the cost of more sampling overhead.
   
+         --ring-wait-interval=ring-wait-interval (absent=0.005)
+             Set the slice interval that olly sleeps in seconds, while waiting
+             for the ring file to appear. Fractions of seconds are supported. A
+             value of 0.0 will skip sleeping altogether. This value must be
+             less or equal to that of --ring-wait-timeout. Defaults to 5ms.
+  
+         --ring-wait-timeout=ring-wait-timeout (absent=5.)
+             Set the total time, in seconds, that olly waits for the ring file
+             to appear, before failing (on some OSs like macOS, the first
+             exxecution of a binary can be slow). Fractions of seconds are
+             supported. This value must be greater or equal to the value of
+             --ring-wait-interval. Defaults to 5s.
+  
   COMMON OPTIONS
          These options are common to all commands.
   
@@ -226,6 +239,19 @@ GC stats subcommand help:
              attributed to it (currently on Linux, OSX, Windows and FreeBSD). A
              shorter interval lowers the chance of missing a transient peak, at
              the cost of more sampling overhead.
+  
+         --ring-wait-interval=ring-wait-interval (absent=0.005)
+             Set the slice interval that olly sleeps in seconds, while waiting
+             for the ring file to appear. Fractions of seconds are supported. A
+             value of 0.0 will skip sleeping altogether. This value must be
+             less or equal to that of --ring-wait-timeout. Defaults to 5ms.
+  
+         --ring-wait-timeout=ring-wait-timeout (absent=5.)
+             Set the total time, in seconds, that olly waits for the ring file
+             to appear, before failing (on some OSs like macOS, the first
+             exxecution of a binary can be slow). Fractions of seconds are
+             supported. This value must be greater or equal to the value of
+             --ring-wait-interval. Defaults to 5s.
   
   COMMON OPTIONS
          These options are common to all commands.

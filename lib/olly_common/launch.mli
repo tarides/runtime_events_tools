@@ -16,7 +16,13 @@ type subprocess = {
   ring_file : string;
 }
 
-type runtime_events_config = { log_wsize : int option; dir : string option }
+type runtime_events_config = {
+  log_wsize : int option;
+  dir : string option;
+  ring_wait_timeout : float;
+  ring_wait_interval : float;
+}
+
 type exec_config = Attach of string * int | Execute of string list
 
 exception Fail of string
@@ -26,6 +32,8 @@ exception Fail of string
 val exec_process : runtime_events_config -> string list -> subprocess
 
 val create_cursor_when_ready :
+  ring_wait_timeout:float ->
+  ring_wait_interval:float ->
   dir:string ->
   pid:int ->
   handle:Platform.handle ->
@@ -55,9 +63,10 @@ type consumer_config = {
   poll_sleep : float;
   runtime_events_dir : string option;
   runtime_events_log_wsize : int option;
+  ring_wait_timeout : float;
+  ring_wait_interval : float;
 }
 
 val events_start_timestamp_ns : unit -> int64
 val events_done_timestamp_ns : unit -> int64
-val empty_config : consumer_config
 val olly : consumer_config -> exec_config -> unit
