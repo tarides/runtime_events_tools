@@ -97,9 +97,9 @@ Trace subcommand help:
              dedicated domain, independently of --freq. The value must be
              positive. The peak is the maximum RSS over samples, less the
              resident pages of the runtime events ring buffer where they can be
-             attributed to it (currently on Linux only). A shorter interval
-             lowers the chance of missing a transient peak, at the cost of more
-             sampling overhead.
+             attributed to it (currently on Linux and OSX only). A shorter
+             interval lowers the chance of missing a transient peak, at the
+             cost of more sampling overhead.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -174,9 +174,9 @@ GC stats subcommand help:
              ring buffer is mapped into the child, and is routinely much larger
              than the program's own live memory, so its resident pages are
              excluded from this figure where the platform permits it. Currently
-             that is Linux only; elsewhere the figure still includes the ring,
-             which the human-readable output says and the json output reports
-             as max_rss_excludes_ring.
+             that is Linux and macOS; elsewhere the figure still includes the
+             ring, which the human-readable output says and the json output
+             reports as max_rss_excludes_ring.
   
   ARGUMENTS
          EXECUTABLE
@@ -217,9 +217,9 @@ GC stats subcommand help:
              dedicated domain, independently of --freq. The value must be
              positive. The peak is the maximum RSS over samples, less the
              resident pages of the runtime events ring buffer where they can be
-             attributed to it (currently on Linux only). A shorter interval
-             lowers the chance of missing a transient peak, at the cost of more
-             sampling overhead.
+             attributed to it (currently on Linux and OSX only). A shorter
+             interval lowers the chance of missing a transient peak, at the
+             cost of more sampling overhead.
   
   COMMON OPTIONS
          These options are common to all commands.
@@ -249,6 +249,9 @@ GC stats subcommand help:
   SEE ALSO
          olly(1)
   
+<<<<<<< HEAD
+=======
+>>>>>>> d3afd5c ([gc-stats][macos] Exclude the runtime events ring from max RSS on macOS)
 Latency subcommand help:
   $ olly latency --help=plain | strip_ver
   NAME
